@@ -14,9 +14,9 @@ intents.members = True
 bot = commands.Bot(command_prefix='!', intents=intents)
 
 # Konfiguracja - oryginalne nazwy użytkowników
-usernames = ["Wenoid", "wordlifepl","Pogoda", "ANN0D0M1N1", "Karlos"]
-team_selection_order = ["Wenoid", "wordlifepl","Pogoda", "ANN0D0M1N1", "Karlos"]
-player_selection_order = ["Wenoid", "wordlifepl","Pogoda", "ANN0D0M1N1", "Karlos"]
+usernames = ["Wenoid", "wordlifepl"]
+team_selection_order = ["Wenoid", "wordlifepl"]
+player_selection_order = ["Wenoid", "wordlifepl"]
 total_rounds = 3
 picks_per_round = [1, 1, 3]
 PLAYERS_URL = "https://gist.githubusercontent.com/wenowinter/31a3d22985e6171b06f15061a8c3613e/raw/50121c8b83d84e626b79caee280574d8d1033826/mekambe1.txt"
