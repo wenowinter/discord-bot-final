@@ -140,7 +140,17 @@ async def druzyny(ctx):
     """Wyświetla dostępne drużyny"""
     msg = ["**Dostępne drużyny:**"]
     for team, color in team_colors.items():
-        msg.append(f"{color} {team}")
+        # Znajdź użytkownika, który wybrał daną drużynę
+        team_owner = None
+        for user, user_team in user_teams.items():
+            if user_team.lower() == team.lower():
+                team_owner = user
+                break
+        
+        if team_owner:
+            msg.append(f"{color} {team} (wybrana przez: {team_owner})")
+        else:
+            msg.append(f"{color} {team}")
     await ctx.send("\n".join(msg))
 
 
