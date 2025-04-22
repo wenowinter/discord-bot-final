@@ -1,22 +1,26 @@
+from flask import Flask
+from threading import Thread
+import os
 import discord
 from discord.ext import commands
 import asyncio
 from datetime import datetime, timedelta
 import requests
 import random
-import os
 
-# ========== FLASK SERVER ========== #
+# ========== FLASK SERVER CONFIG ========== #
 app = Flask(__name__)
 
 @app.route('/')
 def home():
+    """Endpoint keep-alive dla Render"""
     return "Bot aktywny!"
 
 def run_flask():
+    """Uruchamia serwer Flask w tle"""
     port = int(os.environ.get('PORT', 8080))
     app.run(host='0.0.0.0', port=port)
-# ========== END FLASK ========== #
+# ========== END FLASK CONFIG ========== #
 
 
 
