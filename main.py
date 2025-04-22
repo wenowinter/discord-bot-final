@@ -618,8 +618,9 @@ async def pomoc(ctx):
 
 
 # Zabezpieczenie tokena
+# Pobierz token ZE ZMIENNYCH ŚRODOWISKOWYCH
 TOKEN = os.environ.get('DISCORD_TOKEN')
 if not TOKEN:
-    TOKEN = 'MTM2Mzk1OTQ3NjU5OTY1MjQ3Mg.GOOBo0.L8uMzfNPX89QAJcMFw-XIMZPOSo_iandoZR-fk'  # Zastąp swoim tokenem, jeśli nie używasz zmiennych środowiskowych
+    raise ValueError("Nie znaleziono tokenu w zmiennych środowiskowych!")
 
 bot.run(TOKEN)
