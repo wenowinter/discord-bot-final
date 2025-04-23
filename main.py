@@ -36,6 +36,9 @@ class DraftState:
         self.pick_deadline: datetime = None
         self.pick_timer_task = None
         self.reminder_tasks: List[asyncio.Task] = []
+        self.bonus_round_started: bool = False
+        self.bonus_round_players: Set[str] = set()
+        self.bonus_deadline: datetime = None
 
 draft = DraftState()
 
@@ -89,14 +92,14 @@ async def schedule_reminders(channel, user, deadline):
         task.cancel()
     
     reminders = [
-        (deadline - timedelta(minutes=60), "1 godzinę",
-        (deadline - timedelta(minutes=30), "30 minut",
-        (deadline - timedelta(minutes=10), "10 minut"
+        (deadline - timedelta(minutes=60), "1 godzinę"),
+        (deadline - timedelta(minutes=30), "30 minut"),
+        (deadline - timedelta(minutes=10), "10 minut")
     ]
 
     draft.reminder_tasks = [
         asyncio.create_task(send_reminder(channel, user, msg, (when - datetime.utcnow()).total_seconds()))
-        for when, msg in zip(reminders[::2], reminders[1::2]) if (when - datetime.utcnow()).total_seconds() > 0
+        for when, msg in reminders if (when - datetime.utcnow()).total_seconds() > 0
     ]
 
 async def send_reminder(channel, user, msg, wait_time):
