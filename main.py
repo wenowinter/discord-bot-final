@@ -225,13 +225,20 @@ async def start_player_draft(channel):
     await next_pick(channel)
 
 async def next_pick(channel):
+    # Sprawdź czy to koniec draftu
     if draft.current_round >= draft.total_rounds:
         await finish_main_draft(channel)
         return
 
-    # Rotacja kolejności na początku nowej kolejki
-    if draft.current_index == 0 and draft.current_round > 0:
-        draft.players.reverse()
+    # Jeśli przeszliśmy przez wszystkich graczy w rundzie
+    if draft.current_index >= len(draft.players):
+        draft.current_round += 1
+        draft.current_index = 0
+        
+        # Rotacja kolejności na początku nowej rundy
+        if draft.current_round > 0:
+            draft.players.reverse()
+            await channel.send(f"🔄 **ROTACJA KOLEJNOŚCI** - Nowa runda #{draft.current_round + 1}")
 
     player = draft.players[draft.current_index]
     team = draft.user_teams.get(player.display_name.lower(), "Nieznana")
