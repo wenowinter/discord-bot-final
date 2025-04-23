@@ -285,6 +285,7 @@ async def next_pick(channel):
         picks_count *= 2
         draft.picks_multiplier = 1  # Resetujemy mnożnik po użyciu
     
+    # POPRAWIONA LINIA - TERAZ ZAMKNIĘTY NAWIAS:
     await channel.send(
         f"{''.join(TEAM_COLORS.get(team, ['⚫']))} {player.mention}, wybierz "
         f"{picks_count} zawodników ({SELECTION_TIME.seconds//60} minut)!"
