@@ -25,7 +25,7 @@ class DraftState:
         self.players: List[discord.Member] = []
         self.current_index: int = 0
         self.current_round: int = 0
-        self.total_rounds: int = 8  # 8 rund (3 po 1 zawodnika, 5 po 3 zawodników)
+        self.total_rounds: int = 8  # 3 rundy po 1 zawodnika + 5 rund po 3 zawodników = 18 zawodników
         self.picked_numbers: Set[int] = set()
         self.picked_players: Dict[str, List[int]] = {}
         self.user_teams: Dict[str, str] = {}
@@ -92,13 +92,13 @@ async def schedule_reminders(channel, user, deadline):
         task.cancel()
     
     reminders = [
-        (deadline - timedelta(minutes=60), "1 godzinę"),
-        (deadline - timedelta(minutes=30), "30 minut"),
-        (deadline - timedelta(minutes=10), "10 minut")
+        (deadline - timedelta(minutes=60), "1 godzinę",
+        (deadline - timedelta(minutes=30), "30 minut",
+        (deadline - timedelta(minutes=10), "10 minut"
     ]
 
     draft.reminder_tasks = [
-        asyncio.create_task(send_reminder(channel, user, msg, (when - datetime.utcnow()).total_seconds()))
+        asyncio.create_task(send_reminder(channel, user, msg, (when - datetime.utcnow()).total_seconds())
         for when, msg in reminders if (when - datetime.utcnow()).total_seconds() > 0
     ]
 
@@ -229,12 +229,10 @@ async def next_pick(channel):
         await finish_main_draft(channel)
         return
 
-    # Jeśli przeszliśmy przez wszystkich graczy w rundzie
     if draft.current_index >= len(draft.players):
         draft.current_round += 1
         draft.current_index = 0
         
-        # Rotacja kolejności na początku nowej rundy
         if draft.current_round > 0:
             draft.players.reverse()
             await channel.send(f"🔄 **ROTACJA KOLEJNOŚCI** - Nowa runda #{draft.current_round + 1}")
@@ -242,7 +240,7 @@ async def next_pick(channel):
     player = draft.players[draft.current_index]
     team = draft.user_teams.get(player.display_name.lower(), "Nieznana")
     
-    # Określ liczbę zawodników do wybrania w bieżącej rundzie
+    # Dokładnie 3 rundy po 1 zawodnika i 5 rund po 3 zawodników
     picks_per_player = 1 if draft.current_round < 3 else 3
     
     await channel.send(
@@ -354,7 +352,7 @@ async def wybieram_bonus(ctx, *, choice):
         return await ctx.send("Podaj numery oddzielone przecinkami")
     
     if len(picks) != 5:
-        return await ctx.send(f"Wybierz dokładnie 5 zawodników")
+        return await ctx.send("Wybierz dokładnie 5 zawodników")
     
     invalid = [p for p in picks if p not in draft.players_database]
     if invalid:
@@ -425,7 +423,6 @@ async def handle_player_selection(ctx, choice):
     except ValueError:
         return await ctx.send("Podaj numery oddzielone przecinkami")
 
-    # Określ liczbę zawodników do wybrania w bieżącej rundzie
     expected = 1 if draft.current_round < 3 else 3
     
     if len(picks) != expected:
