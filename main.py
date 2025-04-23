@@ -7,12 +7,11 @@ import requests
 import random
 from typing import Dict, List, Set
 
-# ========== KONFIGURACJA INTENCJI ========== #
+# ========== KONFIGURACJA BOTA ========== #
 intents = discord.Intents.default()
 intents.message_content = True
 intents.members = True
 
-# ========== INICJALIZACJA BOTA ========== #
 bot = commands.Bot(
     command_prefix='!',
     intents=intents,
@@ -20,12 +19,13 @@ bot = commands.Bot(
     case_insensitive=True
 )
 
-# ========== KONFIGURACJA DRAFTU ========== #
+# ========== STAN DRAFTU ========== #
 class DraftState:
     def __init__(self):
         self.players: List[discord.Member] = []
         self.current_index: int = 0
         self.current_round: int = 0
+        self.total_rounds: int = 3
         self.picked_numbers: Set[int] = set()
         self.picked_players: Dict[str, List[int]] = {}
         self.user_teams: Dict[str, str] = {}
@@ -33,22 +33,13 @@ class DraftState:
         self.draft_started: bool = False
         self.team_draft_started: bool = False
         self.current_team_selector_index: int = 0
-        self.bonus_round_started: bool = False
-        self.bonus_round_players: Set[str] = set()
-        self.bonus_deadline: datetime = None
-        self.bonus_timer_task = None
-        self.last_picker_index: int = -1
-        self.picks_multiplier: int = 1
-        self.draft_config = {
-            'total_rounds': 3,
-            'picks_per_round': [1, 1, 3],
-            'snake_enabled': True,
-            'double_last_pick': True
-        }
+        self.pick_deadline: datetime = None
+        self.pick_timer_task = None
+        self.reminder_tasks: List[asyncio.Task] = []
 
 draft = DraftState()
 
-# Stałe konfiguracyjne
+# ========== STAŁE ========== #
 TEAM_COLORS = {
     "Jagiellonia": ["🟡", "🔴"],
     "Legia": ["🟢", "⚪"],
@@ -94,38 +85,27 @@ async def load_players() -> Dict[int, str]:
         return {i: f"Zawodnik {i}" for i in range(1, 101)}
 
 # ========== ZARZĄDZANIE CZASEM ========== #
-class TimerManager:
-    def __init__(self):
-        self.pick_deadline: datetime = None
-        self.pick_timer_task: asyncio.Task = None
-        self.reminder_tasks: List[asyncio.Task] = []
+async def schedule_reminders(channel, user, deadline):
+    for task in draft.reminder_tasks:
+        task.cancel()
+    
+    reminders = [
+        (deadline - timedelta(minutes=60), "1 godzinę"),
+        (deadline - timedelta(minutes=30), "30 minut"),
+        (deadline - timedelta(minutes=10), "10 minut")
+    ]
 
-    async def schedule_reminders(self, channel, user, selection_type, deadline):
-        for task in self.reminder_tasks:
-            task.cancel()
-        
-        reminders = [
-            (deadline - timedelta(hours=2), "2 godziny"),
-            (deadline - timedelta(hours=1), "1 godzinę")
-        ]
+    draft.reminder_tasks = [
+        asyncio.create_task(send_reminder(channel, user, msg, (when - datetime.utcnow()).total_seconds()))
+        for when, msg in reminders if (when - datetime.utcnow()).total_seconds() > 0
+    ]
 
-        self.reminder_tasks = [
-            asyncio.create_task(self.send_reminder(
-                channel, user, selection_type, msg, (when - datetime.utcnow()).total_seconds()
-            ))
-            for when, msg in reminders if (when - datetime.utcnow()).total_seconds() > 0
-        ]
+async def send_reminder(channel, user, msg, wait_time):
+    await asyncio.sleep(wait_time)
+    if draft.draft_started:
+        await channel.send(f"⏰ PRZYPOMNIENIE: {user.mention} masz jeszcze {msg} na wybór!")
 
-    async def send_reminder(self, channel, user, selection_type, msg, wait_time):
-        await asyncio.sleep(wait_time)
-        if ((selection_type == "team" and draft.team_draft_started) or 
-            (selection_type == "player" and draft.draft_started) or
-            (selection_type == "bonus" and draft.bonus_round_started)):
-            await channel.send(f"⏰ PRZYPOMNIENIE: {user.mention} masz jeszcze {msg} na wybór {selection_type}!")
-
-timer = TimerManager()
-
-# ========== KOMENDY ========== #
+# ========== KOMENDY BOTA ========== #
 @bot.event
 async def on_ready():
     print(f'Bot {bot.user} gotowy!')
@@ -182,13 +162,13 @@ async def next_team_selection(channel):
         f"Użyj `!wybieram [nazwa]` np. `!wybieram Liverpool`"
     )
 
-    if timer.pick_timer_task:
-        timer.pick_timer_task.cancel()
+    if draft.pick_timer_task:
+        draft.pick_timer_task.cancel()
     
-    timer.pick_timer_task = asyncio.create_task(
+    draft.pick_timer_task = asyncio.create_task(
         team_selection_timer(channel, selector)
     )
-    await timer.schedule_reminders(channel, selector, "team", draft.pick_deadline)
+    await schedule_reminders(channel, selector, draft.pick_deadline)
 
 async def team_selection_timer(channel, selector):
     await asyncio.sleep((draft.pick_deadline - datetime.utcnow()).total_seconds())
@@ -235,8 +215,6 @@ async def start_player_draft(channel):
     draft.current_round = 0
     draft.picked_numbers.clear()
     draft.picked_players = {u.lower(): [] for u in ["Wenoid", "wordlifepl"]}
-    draft.last_picker_index = -1
-    draft.picks_multiplier = 1
 
     await channel.send(
         "**Kolejność wyboru zawodników:**\n" +
@@ -245,54 +223,39 @@ async def start_player_draft(channel):
     await next_pick(channel)
 
 async def next_pick(channel):
-    if draft.current_round >= draft.draft_config['total_rounds']:
+    if draft.current_round >= draft.total_rounds:
         await finish_main_draft(channel)
         return
 
-    if draft.current_index >= len(draft.players):
-        draft.current_index = 0
-        draft.current_round += 1
-        
-        if draft.draft_config['snake_enabled'] and draft.current_round % 2 == 0:
-            draft.players.reverse()
-        
-        if draft.draft_config['double_last_pick'] and draft.last_picker_index != -1:
-            draft.picks_multiplier = 2
-        else:
-            draft.picks_multiplier = 1
+    # Rotacja kolejności na początku nowej kolejki
+    if draft.current_index == 0 and draft.current_round > 0:
+        draft.players.reverse()
 
     player = draft.players[draft.current_index]
     team = draft.user_teams.get(player.display_name.lower(), "Nieznana")
     
-    picks_count = draft.draft_config['picks_per_round'][min(draft.current_round, len(draft.draft_config['picks_per_round'])-1)]
-    
-    if draft.current_index == 0 and draft.picks_multiplier == 2:
-        picks_count *= 2
-        draft.picks_multiplier = 1
-
     await channel.send(
         f"{''.join(TEAM_COLORS.get(team, ['⚫']))} {player.mention}, wybierz "
-        f"{picks_count} zawodników ({SELECTION_TIME.seconds//60} minut)!"
+        f"1 zawodnika ({SELECTION_TIME.seconds//60} minut)!"
     )
 
     draft.pick_deadline = datetime.utcnow() + SELECTION_TIME
-    if timer.pick_timer_task:
-        timer.pick_timer_task.cancel()
+    if draft.pick_timer_task:
+        draft.pick_timer_task.cancel()
     
-    timer.pick_timer_task = asyncio.create_task(
-        player_selection_timer(channel, player, picks_count)
+    draft.pick_timer_task = asyncio.create_task(
+        player_selection_timer(channel, player)
     )
-    await timer.schedule_reminders(channel, player, "player", draft.pick_deadline)
+    await schedule_reminders(channel, player, draft.pick_deadline)
 
-async def player_selection_timer(channel, player, expected_picks):
+async def player_selection_timer(channel, player):
     await asyncio.sleep((draft.pick_deadline - datetime.utcnow()).total_seconds())
     
     if (draft.draft_started and 
         draft.current_index < len(draft.players) and 
         draft.players[draft.current_index] == player):
         
-        await channel.send(f"⏰ Czas minął! {player.mention} nie wybrał zawodników.")
-        draft.last_picker_index = draft.current_index
+        await channel.send(f"⏰ Czas minął! {player.mention} nie wybrał zawodnika.")
         draft.current_index += 1
         await next_pick(channel)
 
@@ -308,10 +271,10 @@ async def finish_main_draft(channel):
         f"**{BONUS_SIGNUP_TIME.seconds//60} minut**, aby wybrać dodatkowych 5 zawodników."
     )
     
-    if draft.bonus_timer_task:
-        draft.bonus_timer_task.cancel()
+    if draft.pick_timer_task:
+        draft.pick_timer_task.cancel()
     
-    draft.bonus_timer_task = asyncio.create_task(
+    draft.pick_timer_task = asyncio.create_task(
         bonus_registration_timer(channel)
     )
 
@@ -389,7 +352,7 @@ async def wybieram_bonus(ctx, *, choice):
     duplicates = [p for p in picks if p in draft.picked_numbers]
     if duplicates:
         return await ctx.send(f"Już wybrani: {', '.join(map(str, duplicates))}")
-
+    
     user_name = ctx.author.display_name.lower()
     draft.picked_players[user_name].extend(picks)
     draft.picked_numbers.update(picks)
@@ -450,12 +413,7 @@ async def handle_player_selection(ctx, choice):
     except ValueError:
         return await ctx.send("Podaj numery oddzielone przecinkami")
 
-    expected = draft.draft_config['picks_per_round'][min(draft.current_round, len(draft.draft_config['picks_per_round'])-1)]
-    
-    if draft.current_index == 0 and draft.picks_multiplier == 2:
-        expected *= 2
-        draft.picks_multiplier = 1
-
+    expected = 1  # Stała liczba wyborów
     if len(picks) != expected:
         return await ctx.send(f"Wybierz dokładnie {expected} zawodników")
 
@@ -469,7 +427,6 @@ async def handle_player_selection(ctx, choice):
 
     draft.picked_players[ctx.author.display_name.lower()].extend(picks)
     draft.picked_numbers.update(picks)
-    draft.last_picker_index = draft.current_index
     
     await ctx.send(
         f"{ctx.author.display_name} wybrał: {', '.join(f'{p} ({draft.players_database[p]})' for p in picks)}"
@@ -525,18 +482,13 @@ async def reset(ctx):
     draft.picked_players = {u.lower(): [] for u in ["Wenoid", "wordlifepl"]}
     draft.user_teams.clear()
     draft.bonus_round_players.clear()
-    draft.last_picker_index = -1
-    draft.picks_multiplier = 1
 
-    if timer.pick_timer_task:
-        timer.pick_timer_task.cancel()
+    if draft.pick_timer_task:
+        draft.pick_timer_task.cancel()
     
-    if draft.bonus_timer_task:
-        draft.bonus_timer_task.cancel()
-    
-    for task in timer.reminder_tasks:
+    for task in draft.reminder_tasks:
         task.cancel()
-    timer.reminder_tasks.clear()
+    draft.reminder_tasks.clear()
 
     await ctx.send("Draft zresetowany.")
 
@@ -551,10 +503,10 @@ async def czas(ctx):
         await ctx.send(f"⏳ Pozostały czas na rejestrację do rundy dodatkowej: {mins} minut i {sec:02d} sekund")
         return
     
-    if not (draft.draft_started or draft.team_draft_started) or not timer.pick_deadline:
+    if not (draft.draft_started or draft.team_draft_started) or not draft.pick_deadline:
         return await ctx.send("Brak aktywnych timerów")
 
-    remaining = timer.pick_deadline - datetime.utcnow()
+    remaining = draft.pick_deadline - datetime.utcnow()
     if remaining.total_seconds() <= 0:
         return await ctx.send("⏰ Czas minął!")
 
@@ -598,5 +550,4 @@ if __name__ == '__main__':
     TOKEN = os.getenv('DISCORD_TOKEN')
     if not TOKEN:
         raise ValueError("Brak tokenu Discord w zmiennych środowiskowych!")
-    
     bot.run(TOKEN)
