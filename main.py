@@ -37,6 +37,14 @@ class DraftState:
         self.bonus_round_players: Set[str] = set()
         self.bonus_deadline: datetime = None
         self.bonus_timer_task = None
+        self.last_picker_index: int = -1  # Nowe pole do śledzenia ostatniego wybierającego
+        self.picks_multiplier: int = 1    # Mnożnik wyborów dla ostatniego gracza
+        self.draft_config = {
+            'total_rounds': 3,
+            'picks_per_round': [1, 1, 3],  # Liczba wyborów w każdej kolejce
+            'snake_enabled': True,  # Czy snake draft jest aktywny
+            'double_last_pick': True  # Czy ostatni gracz dostaje podwójny wybór
+        }
 
 draft = DraftState()
 
@@ -237,31 +245,49 @@ async def start_player_draft(channel):
     draft.current_round = 0
     draft.picked_numbers.clear()
     draft.picked_players = {u.lower(): [] for u in ["Wenoid", "wordlifepl"]}
+    draft.last_picker_index = -1
+    draft.picks_multiplier = 1
 
     await channel.send(
         "**Kolejność wyboru zawodników:**\n" +
         "\n".join(f"{i+1}. {p.display_name}" for i, p in enumerate(draft.players))
-    )
     await next_pick(channel)
 
 async def next_pick(channel):
-    """Obsługuje następny wybór zawodnika"""
-    if draft.current_round >= 3:  # total_rounds
+    """Obsługuje następny wybór zawodnika z uwzględnieniem snake draft i mnożnika wyborów"""
+    if draft.current_round >= draft.draft_config['total_rounds']:
         await finish_main_draft(channel)
         return
 
+    # Jeśli to początek nowej kolejki, zaktualizuj kolejność i mnożnik
     if draft.current_index >= len(draft.players):
         draft.current_index = 0
         draft.current_round += 1
-        if draft.current_round >= 3:  # total_rounds
-            return await next_pick(channel)
+        
+        # Snake draft - odwracamy kolejność co drugą kolejkę
+        if draft.draft_config['snake_enabled'] and draft.current_round % 2 == 0:
+            draft.players.reverse()
+        
+        # Ustawiamy mnożnik dla ostatniego gracza z poprzedniej kolejki
+        if draft.draft_config['double_last_pick'] and draft.last_picker_index != -1:
+            draft.picks_multiplier = 2
+        else:
+            draft.picks_multiplier = 1
 
     player = draft.players[draft.current_index]
     team = draft.user_teams.get(player.display_name.lower(), "Nieznana")
     
+    # Określamy liczbę wyborów
+    picks_count = draft.draft_config['picks_per_round'][min(draft.current_round, len(draft.draft_config['picks_per_round'])-1)]
+    
+    # Jeśli to pierwszy gracz w kolejce i ma bonus za bycie ostatnim w poprzedniej
+    if draft.current_index == 0 and draft.picks_multiplier == 2:
+        picks_count *= 2
+        draft.picks_multiplier = 1  # Resetujemy mnożnik po użyciu
+    
     await channel.send(
         f"{''.join(TEAM_COLORS.get(team, ['⚫']))} {player.mention}, wybierz "
-        f"{[1, 1, 3][draft.current_round]} zawodników ({SELECTION_TIME.seconds//60} minut)!"
+        f"{picks_count} zawodników ({SELECTION_TIME.seconds//60} minut)!"
     )
 
     draft.pick_deadline = datetime.utcnow() + SELECTION_TIME
@@ -269,12 +295,12 @@ async def next_pick(channel):
         timer.pick_timer_task.cancel()
     
     timer.pick_timer_task = asyncio.create_task(
-        player_selection_timer(channel, player)
+        player_selection_timer(channel, player, picks_count)
     )
     await timer.schedule_reminders(channel, player, "player", draft.pick_deadline)
 
-async def player_selection_timer(channel, player):
-    """Obsługuje timeout wyboru zawodnika"""
+async def player_selection_timer(channel, player, expected_picks):
+    """Obsługuje timeout wyboru zawodnika z uwzględnieniem oczekiwanej liczby wyborów"""
     await asyncio.sleep((draft.pick_deadline - datetime.utcnow()).total_seconds())
     
     if (draft.draft_started and 
@@ -282,6 +308,7 @@ async def player_selection_timer(channel, player):
         draft.players[draft.current_index] == player):
         
         await channel.send(f"⏰ Czas minął! {player.mention} nie wybrał zawodników.")
+        draft.last_picker_index = draft.current_index
         draft.current_index += 1
         await next_pick(channel)
 
@@ -383,7 +410,7 @@ async def wybieram_bonus(ctx, *, choice):
     duplicates = [p for p in picks if p in draft.picked_numbers]
     if duplicates:
         return await ctx.send(f"Już wybrani: {', '.join(map(str, duplicates))}")
-    
+
     user_name = ctx.author.display_name.lower()
     draft.picked_players[user_name].extend(picks)
     draft.picked_numbers.update(picks)
@@ -447,7 +474,14 @@ async def handle_player_selection(ctx, choice):
     except ValueError:
         return await ctx.send("Podaj numery oddzielone przecinkami")
 
-    expected = [1, 1, 3][draft.current_round]
+    # Pobieramy oczekiwaną liczbę wyborów z konfiguracji
+    expected = draft.draft_config['picks_per_round'][min(draft.current_round, len(draft.draft_config['picks_per_round'])-1)]
+    
+    # Jeśli to pierwszy gracz w kolejce i ma bonus za bycie ostatnim w poprzedniej
+    if draft.current_index == 0 and draft.picks_multiplier == 2:
+        expected *= 2
+        draft.picks_multiplier = 1  # Resetujemy mnożnik po użyciu
+
     if len(picks) != expected:
         return await ctx.send(f"Wybierz dokładnie {expected} zawodników")
 
@@ -461,6 +495,7 @@ async def handle_player_selection(ctx, choice):
 
     draft.picked_players[ctx.author.display_name.lower()].extend(picks)
     draft.picked_numbers.update(picks)
+    draft.last_picker_index = draft.current_index
     
     await ctx.send(
         f"{ctx.author.display_name} wybrał: {', '.join(f'{p} ({draft.players_database[p]})' for p in picks)}"
@@ -518,6 +553,8 @@ async def reset(ctx):
     draft.picked_players = {u.lower(): [] for u in ["Wenoid", "wordlifepl"]}
     draft.user_teams.clear()
     draft.bonus_round_players.clear()
+    draft.last_picker_index = -1
+    draft.picks_multiplier = 1
 
     if timer.pick_timer_task:
         timer.pick_timer_task.cancel()
