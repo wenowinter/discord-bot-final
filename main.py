@@ -96,7 +96,7 @@ async def schedule_reminders(channel, user, deadline):
 
     draft.reminder_tasks = [
         asyncio.create_task(send_reminder(channel, user, msg, (when - datetime.utcnow()).total_seconds()))
-        for when, msg in reminders if (when - datetime.utcnow()).total_seconds() > 0
+        for when, msg in zip(reminders[::2], reminders[1::2]) if (when - datetime.utcnow()).total_seconds() > 0
     ]
 
 async def send_reminder(channel, user, msg, wait_time):
