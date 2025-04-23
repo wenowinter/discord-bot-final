@@ -25,7 +25,7 @@ class DraftState:
         self.players: List[discord.Member] = []
         self.current_index: int = 0
         self.current_round: int = 0
-        self.total_rounds: int = 3
+        self.total_rounds: int = 8  # 8 rund (3 po 1 zawodnika, 5 po 3 zawodników)
         self.picked_numbers: Set[int] = set()
         self.picked_players: Dict[str, List[int]] = {}
         self.user_teams: Dict[str, str] = {}
@@ -137,16 +137,16 @@ async def start(ctx):
     draft.current_team_selector_index = 0
     draft.user_teams.clear()
 
-    order = "\n".join(f"{i+1}. {name}" for i, name in enumerate(["Wenoid", "wordlifepl", "ANN0D0M1N1"]))
+    order = "\n".join(f"{i+1}. {name}" for i, name in enumerate(["Wenoid", "wordlifepl", "ANN0D0M1N1", "Pogoda"]))
     await ctx.send(f"Rozpoczynamy wybór drużyn! Kolejność:\n{order}")
     await next_team_selection(ctx.channel)
 
 async def next_team_selection(channel):
-    if draft.current_team_selector_index >= len(["Wenoid", "wordlifepl", "ANN0D0M1N1"]):
+    if draft.current_team_selector_index >= len(["Wenoid", "wordlifepl", "ANN0D0M1N1", "Pogoda"]):
         await finish_team_selection(channel)
         return
 
-    selector_name = ["Wenoid", "wordlifepl", "ANN0D0M1N1"][draft.current_team_selector_index]
+    selector_name = ["Wenoid", "wordlifepl", "ANN0D0M1N1", "Pogoda"][draft.current_team_selector_index]
     selector = find_member_by_name(channel.guild.members, selector_name)
     
     if not selector:
@@ -176,8 +176,8 @@ async def team_selection_timer(channel, selector):
     await asyncio.sleep((draft.pick_deadline - datetime.utcnow()).total_seconds())
     
     if (draft.team_draft_started and 
-        draft.current_team_selector_index < len(["Wenoid", "wordlifepl", "ANN0D0M1N1"]) and
-        ["Wenoid", "wordlifepl", "ANN0D0M1N1"][draft.current_team_selector_index].lower() == selector.display_name.lower()):
+        draft.current_team_selector_index < len(["Wenoid", "wordlifepl", "ANN0D0M1N1", "Pogoda"]) and
+        ["Wenoid", "wordlifepl", "ANN0D0M1N1", "Pogoda"][draft.current_team_selector_index].lower() == selector.display_name.lower()):
         
         available = [t for t in TEAM_COLORS 
                     if t.lower() not in [t.lower() for t in draft.user_teams.values()]]
@@ -205,7 +205,7 @@ async def finish_team_selection(channel):
 async def start_player_draft(channel):
     draft.players = [
         find_member_by_name(channel.guild.members, name)
-        for name in ["Wenoid", "wordlifepl", "ANN0D0M1N1"]
+        for name in ["Wenoid", "wordlifepl", "ANN0D0M1N1", "Pogoda"]
     ]
     
     if None in draft.players:
@@ -216,7 +216,7 @@ async def start_player_draft(channel):
     draft.current_index = 0
     draft.current_round = 0
     draft.picked_numbers.clear()
-    draft.picked_players = {u.lower(): [] for u in ["Wenoid", "wordlifepl", "ANN0D0M1N1"]}
+    draft.picked_players = {u.lower(): [] for u in ["Wenoid", "wordlifepl", "ANN0D0M1N1", "Pogoda"]}
 
     await channel.send(
         "**Kolejność wyboru zawodników:**\n" +
@@ -225,7 +225,6 @@ async def start_player_draft(channel):
     await next_pick(channel)
 
 async def next_pick(channel):
-    # Sprawdź czy to koniec draftu
     if draft.current_round >= draft.total_rounds:
         await finish_main_draft(channel)
         return
@@ -243,9 +242,12 @@ async def next_pick(channel):
     player = draft.players[draft.current_index]
     team = draft.user_teams.get(player.display_name.lower(), "Nieznana")
     
+    # Określ liczbę zawodników do wybrania w bieżącej rundzie
+    picks_per_player = 1 if draft.current_round < 3 else 3
+    
     await channel.send(
         f"{''.join(TEAM_COLORS.get(team, ['⚫']))} {player.mention}, wybierz "
-        f"1 zawodnika ({SELECTION_TIME.seconds//60} minut)!"
+        f"{picks_per_player} zawodników ({SELECTION_TIME.seconds//60} minut)!"
     )
 
     draft.pick_deadline = datetime.utcnow() + SELECTION_TIME
@@ -387,11 +389,11 @@ async def wybieram(ctx, *, choice):
         await ctx.send("Draft nie jest aktywny. Użyj !start")
 
 async def handle_team_selection(ctx, choice):
-    if draft.current_team_selector_index >= len(["Wenoid", "wordlifepl", "ANN0D0M1N1"]):
+    if draft.current_team_selector_index >= len(["Wenoid", "wordlifepl", "ANN0D0M1N1", "Pogoda"]):
         await ctx.send("Wybór drużyn zakończony!")
         return
 
-    selector_name = ["Wenoid", "wordlifepl", "ANN0D0M1N1"][draft.current_team_selector_index]
+    selector_name = ["Wenoid", "wordlifepl", "ANN0D0M1N1", "Pogoda"][draft.current_team_selector_index]
     if ctx.author.display_name.lower() != selector_name.lower():
         await ctx.send("Nie twoja kolej!")
         return
@@ -423,9 +425,11 @@ async def handle_player_selection(ctx, choice):
     except ValueError:
         return await ctx.send("Podaj numery oddzielone przecinkami")
 
-    expected = 1
+    # Określ liczbę zawodników do wybrania w bieżącej rundzie
+    expected = 1 if draft.current_round < 3 else 3
+    
     if len(picks) != expected:
-        return await ctx.send(f"Wybierz dokładnie {expected} zawodnika")
+        return await ctx.send(f"Wybierz dokładnie {expected} zawodników")
 
     invalid = [p for p in picks if p not in draft.players_database]
     if invalid:
@@ -489,7 +493,7 @@ async def reset(ctx):
     draft.current_round = 0
     draft.current_team_selector_index = 0
     draft.picked_numbers.clear()
-    draft.picked_players = {u.lower(): [] for u in ["Wenoid", "wordlifepl", "ANN0D0M1N1"]}
+    draft.picked_players = {u.lower(): [] for u in ["Wenoid", "wordlifepl", "ANN0D0M1N1", "Pogoda"]}
     draft.user_teams.clear()
     draft.bonus_round_players.clear()
 
