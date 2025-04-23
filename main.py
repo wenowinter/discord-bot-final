@@ -92,9 +92,9 @@ async def schedule_reminders(channel, user, deadline):
         task.cancel()
     
     reminders = [
-        (deadline - timedelta(minutes=60), "1 godzinę",
-        (deadline - timedelta(minutes=30), "30 minut",
-        (deadline - timedelta(minutes=10), "10 minut"
+        (deadline - timedelta(minutes=60), "1 godzinę"),
+        (deadline - timedelta(minutes=30), "30 minut"),
+        (deadline - timedelta(minutes=10), "10 minut")
     ]
 
     draft.reminder_tasks = [
