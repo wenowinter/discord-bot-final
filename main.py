@@ -92,14 +92,14 @@ async def schedule_reminders(channel, user, deadline):
         task.cancel()
     
     reminders = [
-        (deadline - timedelta(minutes=60), "1 godzinę"),
-        (deadline - timedelta(minutes=30), "30 minut"),
-        (deadline - timedelta(minutes=10), "10 minut")
+        (deadline - timedelta(minutes=60), "1 godzinę",
+        (deadline - timedelta(minutes=30), "30 minut",
+        (deadline - timedelta(minutes=10), "10 minut"
     ]
 
     draft.reminder_tasks = [
-        asyncio.create_task(send_reminder(channel, user, msg, (when - datetime.utcnow()).total_seconds()))
-        for when, msg in reminders if (when - datetime.utcnow()).total_seconds() > 0
+        asyncio.create_task(send_reminder(channel, user, msg, (when - datetime.utcnow()).total_seconds())
+        for when, msg in zip(reminders[::2], reminders[1::2]) if (when - datetime.utcnow()).total_seconds() > 0
     ]
 
 async def send_reminder(channel, user, msg, wait_time):
@@ -137,16 +137,16 @@ async def start(ctx):
     draft.current_team_selector_index = 0
     draft.user_teams.clear()
 
-    order = "\n".join(f"{i+1}. {name}" for i, name in enumerate(["Wenoid", "wordlifepl", "ANN0D0M1N1", "Pogoda"]))
+    order = "\n".join(f"{i+1}. {name}" for i, name in enumerate(["Wenoid", "wordlifepl"]))
     await ctx.send(f"Rozpoczynamy wybór drużyn! Kolejność:\n{order}")
     await next_team_selection(ctx.channel)
 
 async def next_team_selection(channel):
-    if draft.current_team_selector_index >= len(["Wenoid", "wordlifepl", "ANN0D0M1N1", "Pogoda"]):
+    if draft.current_team_selector_index >= len(["Wenoid", "wordlifepl"]):
         await finish_team_selection(channel)
         return
 
-    selector_name = ["Wenoid", "wordlifepl", "ANN0D0M1N1", "Pogoda"][draft.current_team_selector_index]
+    selector_name = ["Wenoid", "wordlifepl"][draft.current_team_selector_index]
     selector = find_member_by_name(channel.guild.members, selector_name)
     
     if not selector:
@@ -176,8 +176,8 @@ async def team_selection_timer(channel, selector):
     await asyncio.sleep((draft.pick_deadline - datetime.utcnow()).total_seconds())
     
     if (draft.team_draft_started and 
-        draft.current_team_selector_index < len(["Wenoid", "wordlifepl", "ANN0D0M1N1", "Pogoda"]) and
-        ["Wenoid", "wordlifepl", "ANN0D0M1N1", "Pogoda"][draft.current_team_selector_index].lower() == selector.display_name.lower()):
+        draft.current_team_selector_index < len(["Wenoid", "wordlifepl"]) and
+        ["Wenoid", "wordlifepl"][draft.current_team_selector_index].lower() == selector.display_name.lower()):
         
         available = [t for t in TEAM_COLORS 
                     if t.lower() not in [t.lower() for t in draft.user_teams.values()]]
@@ -205,7 +205,7 @@ async def finish_team_selection(channel):
 async def start_player_draft(channel):
     draft.players = [
         find_member_by_name(channel.guild.members, name)
-        for name in ["Wenoid", "wordlifepl", "ANN0D0M1N1", "Pogoda"]
+        for name in ["Wenoid", "wordlifepl"]
     ]
     
     if None in draft.players:
@@ -216,7 +216,7 @@ async def start_player_draft(channel):
     draft.current_index = 0
     draft.current_round = 0
     draft.picked_numbers.clear()
-    draft.picked_players = {u.lower(): [] for u in ["Wenoid", "wordlifepl", "ANN0D0M1N1", "Pogoda"]}
+    draft.picked_players = {u.lower(): [] for u in ["Wenoid", "wordlifepl"]}
 
     await channel.send(
         "**Kolejność wyboru zawodników:**\n" +
@@ -389,11 +389,11 @@ async def wybieram(ctx, *, choice):
         await ctx.send("Draft nie jest aktywny. Użyj !start")
 
 async def handle_team_selection(ctx, choice):
-    if draft.current_team_selector_index >= len(["Wenoid", "wordlifepl", "ANN0D0M1N1", "Pogoda"]):
+    if draft.current_team_selector_index >= len(["Wenoid", "wordlifepl"]):
         await ctx.send("Wybór drużyn zakończony!")
         return
 
-    selector_name = ["Wenoid", "wordlifepl", "ANN0D0M1N1", "Pogoda"][draft.current_team_selector_index]
+    selector_name = ["Wenoid", "wordlifepl"][draft.current_team_selector_index]
     if ctx.author.display_name.lower() != selector_name.lower():
         await ctx.send("Nie twoja kolej!")
         return
@@ -493,7 +493,7 @@ async def reset(ctx):
     draft.current_round = 0
     draft.current_team_selector_index = 0
     draft.picked_numbers.clear()
-    draft.picked_players = {u.lower(): [] for u in ["Wenoid", "wordlifepl", "ANN0D0M1N1", "Pogoda"]}
+    draft.picked_players = {u.lower(): [] for u in ["Wenoid", "wordlifepl"]}
     draft.user_teams.clear()
     draft.bonus_round_players.clear()
 
