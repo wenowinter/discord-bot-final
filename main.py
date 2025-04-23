@@ -16,8 +16,8 @@ intents.members = True
 bot = commands.Bot(
     command_prefix='!',
     intents=intents,
-    help_command=None,  # Wyłączamy domyślną komendę pomocy
-    case_insensitive=True  # Komendy nieczułe na wielkość liter
+    help_command=None,
+    case_insensitive=True
 )
 
 # ========== KONFIGURACJA DRAFTU ========== #
@@ -27,7 +27,7 @@ class DraftState:
         self.current_index: int = 0
         self.current_round: int = 0
         self.picked_numbers: Set[int] = set()
-        self.picked_players: Dict[str, List[int]] = {u.lower(): [] for u in ["Wenoid", "wordlifepl"]}
+        self.picked_players: Dict[str, List[int]] = {}
         self.user_teams: Dict[str, str] = {}
         self.players_database: Dict[int, str] = {}
         self.draft_started: bool = False
@@ -37,38 +37,39 @@ class DraftState:
         self.bonus_round_players: Set[str] = set()
         self.bonus_deadline: datetime = None
         self.bonus_timer_task = None
-        self.last_picker_index: int = -1  # Nowe pole do śledzenia ostatniego wybierającego
-        self.picks_multiplier: int = 1    # Mnożnik wyborów dla ostatniego gracza
+        self.last_picker_index: int = -1
+        self.picks_multiplier: int = 1
         self.draft_config = {
             'total_rounds': 3,
-            'picks_per_round': [1, 1, 3],  # Liczba wyborów w każdej kolejce
-            'snake_enabled': True,  # Czy snake draft jest aktywny
-            'double_last_pick': True  # Czy ostatni gracz dostaje podwójny wybór
+            'picks_per_round': [1, 1, 3],
+            'snake_enabled': True,
+            'double_last_pick': True
         }
 
 draft = DraftState()
 
 # Stałe konfiguracyjne
 TEAM_COLORS = {
-    "Jagiellonia": ["🟡", "🔴"],  # Żółto-czerwone
-    "Legia": ["🟢", "⚪"],         # Zielono-białe
-    "Bayern": ["🔴", "🔵"],        # Czerwono-niebieskie
-    "Renopuren": ["🔵", "⚪"],     # Niebiesko-białe
-    "Liverpool": ["🔴", "⚪"],     # Czerwono-białe
-    "Man City": ["🔵", "⚪"],      # Jasnoniebiesko-białe
-    "Man United": ["🔴", "⚫"],    # Czerwono-czarne
-    "Arsenal": ["🔴", "⚪"],       # Czerwono-białe
-    "Celtic": ["🟢", "⚪"],        # Zielono-białe
-    "PSG": ["🔵", "🔴"],          # Niebiesko-czerwone
-    "Real Madryt": ["⚪", "🟣"],   # Biało-fioletowe
-    "Barcelona": ["🔵", "🔴"],     # Granatowo-czerwone
-    "Milan": ["🔴", "⚫"],         # Czerwono-czarne
-    "Inter": ["🔵", "⚫"],         # Niebiesko-czarne
-    "Juventus": ["⚪", "⚫"],       # Biało-czarne
-    "Slavia Praga": ["🔴", "⚪"],   # Czerwono-białe
-    "Borussia": ["🟡", "⚫"],       # Żółto-czarne
-    "AS Roma": ["🔴", "🟠"]         # Czerwono-pomarańczowe
+    "Jagiellonia": ["🟡", "🔴"],
+    "Legia": ["🟢", "⚪"],
+    "Bayern": ["🔴", "🔵"],
+    "Renopuren": ["🔵", "⚪"],
+    "Liverpool": ["🔴", "⚪"],
+    "Man City": ["🔵", "⚪"],
+    "Man United": ["🔴", "⚫"],
+    "Arsenal": ["🔴", "⚪"],
+    "Celtic": ["🟢", "⚪"],
+    "PSG": ["🔵", "🔴"],
+    "Real Madryt": ["⚪", "🟣"],
+    "Barcelona": ["🔵", "🔴"],
+    "Milan": ["🔴", "⚫"],
+    "Inter": ["🔵", "⚫"],
+    "Juventus": ["⚪", "⚫"],
+    "Slavia Praga": ["🔴", "⚪"],
+    "Borussia": ["🟡", "⚫"],
+    "AS Roma": ["🔴", "🟠"]
 }
+
 PLAYERS_URL = "https://gist.githubusercontent.com/wenowinter/31a3d22985e6171b06f15061a8c3613e/raw/50121c8b83d84e626b79caee280574d8d1033826/mekambe1.txt"
 SELECTION_TIME = timedelta(minutes=180)
 BONUS_SIGNUP_TIME = timedelta(minutes=10)
@@ -76,12 +77,10 @@ BONUS_SELECTION_TIME = timedelta(minutes=180)
 
 # ========== FUNKCJE POMOCNICZE ========== #
 def find_member_by_name(members: List[discord.Member], name: str) -> discord.Member:
-    """Znajduje członka serwera po nazwie (case-insensitive)"""
     name_lower = name.lower()
     return next((m for m in members if m.display_name.lower() == name_lower), None)
 
 async def load_players() -> Dict[int, str]:
-    """Ładuje zawodników z zewnętrznego URL"""
     try:
         response = requests.get(PLAYERS_URL)
         response.raise_for_status()
@@ -102,7 +101,6 @@ class TimerManager:
         self.reminder_tasks: List[asyncio.Task] = []
 
     async def schedule_reminders(self, channel, user, selection_type, deadline):
-        """Planuje przypomnienia przed upływem czasu"""
         for task in self.reminder_tasks:
             task.cancel()
         
@@ -119,7 +117,6 @@ class TimerManager:
         ]
 
     async def send_reminder(self, channel, user, selection_type, msg, wait_time):
-        """Wysyła przypomnienie po określonym czasie"""
         await asyncio.sleep(wait_time)
         if ((selection_type == "team" and draft.team_draft_started) or 
             (selection_type == "player" and draft.draft_started) or
@@ -131,7 +128,6 @@ timer = TimerManager()
 # ========== KOMENDY ========== #
 @bot.event
 async def on_ready():
-    """Inicjalizacja bota po uruchomieniu"""
     print(f'Bot {bot.user} gotowy!')
     draft.players_database = await load_players()
     await bot.change_presence(activity=discord.Activity(
@@ -141,7 +137,6 @@ async def on_ready():
 
 @bot.command()
 async def druzyny(ctx):
-    """Pokazuje dostępne drużyny z informacją o właścicielach"""
     teams_info = []
     for team, colors in TEAM_COLORS.items():
         owner = next((u for u, t in draft.user_teams.items() if t.lower() == team.lower()), None)
@@ -152,7 +147,6 @@ async def druzyny(ctx):
 
 @bot.command()
 async def start(ctx):
-    """Rozpoczyna proces draftu"""
     if draft.draft_started or draft.team_draft_started:
         await ctx.send("Draft już trwa!")
         return
@@ -166,7 +160,6 @@ async def start(ctx):
     await next_team_selection(ctx.channel)
 
 async def next_team_selection(channel):
-    """Obsługuje kolejny wybór drużyny"""
     if draft.current_team_selector_index >= len(["Wenoid", "wordlifepl"]):
         await finish_team_selection(channel)
         return
@@ -198,7 +191,6 @@ async def next_team_selection(channel):
     await timer.schedule_reminders(channel, selector, "team", draft.pick_deadline)
 
 async def team_selection_timer(channel, selector):
-    """Obsługuje timeout wyboru drużyny"""
     await asyncio.sleep((draft.pick_deadline - datetime.utcnow()).total_seconds())
     
     if (draft.team_draft_started and 
@@ -219,7 +211,6 @@ async def team_selection_timer(channel, selector):
         await next_team_selection(channel)
 
 async def finish_team_selection(channel):
-    """Finalizuje wybór drużyn i rozpoczyna draft zawodników"""
     draft.team_draft_started = False
     summary = ["**Wybieranie drużyn zakończone!**"] + [
         f"{''.join(TEAM_COLORS.get(t, ['⚫']))} {u}: {t}" 
@@ -230,7 +221,6 @@ async def finish_team_selection(channel):
     await start_player_draft(channel)
 
 async def start_player_draft(channel):
-    """Rozpoczyna draft zawodników"""
     draft.players = [
         find_member_by_name(channel.guild.members, name)
         for name in ["Wenoid", "wordlifepl"]
@@ -251,24 +241,21 @@ async def start_player_draft(channel):
     await channel.send(
         "**Kolejność wyboru zawodników:**\n" +
         "\n".join(f"{i+1}. {p.display_name}" for i, p in enumerate(draft.players))
+    )
     await next_pick(channel)
 
 async def next_pick(channel):
-    """Obsługuje następny wybór zawodnika z uwzględnieniem snake draft i mnożnika wyborów"""
     if draft.current_round >= draft.draft_config['total_rounds']:
         await finish_main_draft(channel)
         return
 
-    # Jeśli to początek nowej kolejki, zaktualizuj kolejność i mnożnik
     if draft.current_index >= len(draft.players):
         draft.current_index = 0
         draft.current_round += 1
         
-        # Snake draft - odwracamy kolejność co drugą kolejkę
         if draft.draft_config['snake_enabled'] and draft.current_round % 2 == 0:
             draft.players.reverse()
         
-        # Ustawiamy mnożnik dla ostatniego gracza z poprzedniej kolejki
         if draft.draft_config['double_last_pick'] and draft.last_picker_index != -1:
             draft.picks_multiplier = 2
         else:
@@ -277,15 +264,12 @@ async def next_pick(channel):
     player = draft.players[draft.current_index]
     team = draft.user_teams.get(player.display_name.lower(), "Nieznana")
     
-    # Określamy liczbę wyborów
     picks_count = draft.draft_config['picks_per_round'][min(draft.current_round, len(draft.draft_config['picks_per_round'])-1)]
     
-    # Jeśli to pierwszy gracz w kolejce i ma bonus za bycie ostatnim w poprzedniej
     if draft.current_index == 0 and draft.picks_multiplier == 2:
         picks_count *= 2
-        draft.picks_multiplier = 1  # Resetujemy mnożnik po użyciu
-    
-    # POPRAWIONA LINIA - TERAZ ZAMKNIĘTY NAWIAS:
+        draft.picks_multiplier = 1
+
     await channel.send(
         f"{''.join(TEAM_COLORS.get(team, ['⚫']))} {player.mention}, wybierz "
         f"{picks_count} zawodników ({SELECTION_TIME.seconds//60} minut)!"
@@ -301,7 +285,6 @@ async def next_pick(channel):
     await timer.schedule_reminders(channel, player, "player", draft.pick_deadline)
 
 async def player_selection_timer(channel, player, expected_picks):
-    """Obsługuje timeout wyboru zawodnika z uwzględnieniem oczekiwanej liczby wyborów"""
     await asyncio.sleep((draft.pick_deadline - datetime.utcnow()).total_seconds())
     
     if (draft.draft_started and 
@@ -314,7 +297,6 @@ async def player_selection_timer(channel, player, expected_picks):
         await next_pick(channel)
 
 async def finish_main_draft(channel):
-    """Finalizuje główny draft i rozpoczyna rundę dodatkową"""
     draft.draft_started = False
     draft.bonus_round_started = True
     draft.bonus_round_players.clear()
@@ -326,7 +308,6 @@ async def finish_main_draft(channel):
         f"**{BONUS_SIGNUP_TIME.seconds//60} minut**, aby wybrać dodatkowych 5 zawodników."
     )
     
-    # Ustawiamy timer na rejestrację do rundy dodatkowej
     if draft.bonus_timer_task:
         draft.bonus_timer_task.cancel()
     
@@ -335,7 +316,6 @@ async def finish_main_draft(channel):
     )
 
 async def bonus_registration_timer(channel):
-    """Obsługuje koniec czasu na zapisanie się do rundy dodatkowej"""
     await asyncio.sleep((draft.bonus_deadline - datetime.utcnow()).total_seconds())
     
     if draft.bonus_round_started:
@@ -357,7 +337,6 @@ async def bonus_registration_timer(channel):
 
 @bot.command()
 async def bonus(ctx):
-    """Rejestruje gracza do rundy dodatkowej"""
     if not draft.bonus_round_started:
         return await ctx.send("Runda dodatkowa nie jest aktywna!")
     
@@ -383,7 +362,6 @@ async def bonus(ctx):
 
 @bot.command()
 async def wybieram_bonus(ctx, *, choice):
-    """Obsługuje wybór dodatkowych zawodników w rundzie dodatkowej"""
     if not draft.bonus_round_started:
         return await ctx.send("Runda dodatkowa nie jest aktywna!")
     
@@ -421,17 +399,14 @@ async def wybieram_bonus(ctx, *, choice):
         f"{', '.join(f'{p} ({draft.players_database[p]})' for p in picks)}"
     )
     
-    # Usuwamy gracza z listy, żeby nie mógł wybrać ponownie
     draft.bonus_round_players.remove(user_id)
     
-    # Jeśli wszyscy wybrali, kończymy rundę dodatkową
     if not draft.bonus_round_players:
         draft.bonus_round_started = False
         await ctx.send("🏆 **Wszystkie wybory zostały dokonane. Draft oficjalnie zakończony!**")
 
 @bot.command()
 async def wybieram(ctx, *, choice):
-    """Obsługuje wybór drużyny lub zawodników"""
     if draft.team_draft_started:
         await handle_team_selection(ctx, choice)
     elif draft.draft_started:
@@ -475,13 +450,11 @@ async def handle_player_selection(ctx, choice):
     except ValueError:
         return await ctx.send("Podaj numery oddzielone przecinkami")
 
-    # Pobieramy oczekiwaną liczbę wyborów z konfiguracji
     expected = draft.draft_config['picks_per_round'][min(draft.current_round, len(draft.draft_config['picks_per_round'])-1)]
     
-    # Jeśli to pierwszy gracz w kolejce i ma bonus za bycie ostatnim w poprzedniej
     if draft.current_index == 0 and draft.picks_multiplier == 2:
         expected *= 2
-        draft.picks_multiplier = 1  # Resetujemy mnożnik po użyciu
+        draft.picks_multiplier = 1
 
     if len(picks) != expected:
         return await ctx.send(f"Wybierz dokładnie {expected} zawodników")
@@ -506,7 +479,6 @@ async def handle_player_selection(ctx, choice):
 
 @bot.command()
 async def lista(ctx):
-    """Wyświetla listę wybranych zawodników"""
     if not draft.players_database:
         return await ctx.send("❌ Błąd: brak danych zawodników")
 
@@ -539,7 +511,6 @@ async def lista(ctx):
 
 @bot.command()
 async def reset(ctx):
-    """Resetuje stan draftu"""
     if not ctx.author.guild_permissions.administrator:
         return await ctx.send("❌ Tylko administrator może zresetować draft")
 
@@ -571,7 +542,6 @@ async def reset(ctx):
 
 @bot.command()
 async def czas(ctx):
-    """Pokazuje pozostały czas na wybór"""
     if draft.bonus_round_started and draft.bonus_deadline:
         remaining = draft.bonus_deadline - datetime.utcnow()
         if remaining.total_seconds() <= 0:
@@ -599,24 +569,21 @@ async def czas(ctx):
 
 @bot.command()
 async def lubicz(ctx):
-    """Wyświetla obrazek Lubicz"""
     await ctx.send("https://i.ibb.co/tw1tD1Ny/412206195-1406350803614829-5742951929454962748-n-removebg-preview-1.png")
 
 @bot.command()
 async def komar(ctx):
-    """Wyświetla obrazek Komar"""
     await ctx.send("https://scontent.fpoz4-1.fna.fbcdn.net/v/t39.30808-6/462362759_3871042979836522_4405035252432652447_n.jpg?_nc_cat=103&ccb=1-7&_nc_sid=6ee11a&_nc_ohc=mLtEcPyAeiwQ7kNvwEQ0kN6&_nc_oc=AdkOQC_KOMghLeoWDifpuwrjt13CvuIDYUt3Vwps1vUGakoskHkkl6xSxqYDUbkbKpE&_nc_zt=23&_nc_ht=scontent.fpoz4-1.fna&_nc_gid=OomLe8A4aLtMLUmIYtQ5_w&oh=00_AfEO44DS7ODe3W_cjKgVEW1fij8-aEJAYKl9_RP6PzHPDQ&oe=680DD11A")
 
 @bot.command()
 async def pomoc(ctx):
-    """Wyświetla dostępne komendy"""
     help_msg = [
         "**📋 Lista komend:**",
         "• `!start` - Rozpoczyna draft",
         "• `!druzyny` - Pokazuje dostępne drużyny",
         "• `!wybieram [drużyna/zawodnicy]` - Wybiera drużynę lub zawodników",
-        "• `!bonus` - Zapisuje Cię do rundy dodatkowej (dostępne po zakończeniu głównego drafta)",
-        "• `!wybieram_bonus [zawodnicy]` - Wybiera dodatkowych zawodników w rundzie bonusowej",
+        "• `!bonus` - Zapisuje Cię do rundy dodatkowej",
+        "• `!wybieram_bonus [zawodnicy]` - Wybiera dodatkowych zawodników",
         "• `!lista` - Pokazuje wybranych zawodników",
         "• `!czas` - Pokazuje pozostały czas",
         "• `!pomoc` - Ta wiadomość",
