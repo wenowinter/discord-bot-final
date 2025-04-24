@@ -39,6 +39,7 @@ class DraftState:
         self.bonus_round_started: bool = False
         self.bonus_round_players: Set[str] = set()
         self.bonus_deadline: datetime = None
+        self.bonus_end_time: datetime = None  # Czas zakończenia rundy bonusowej
 
 draft = DraftState()
 
@@ -132,6 +133,14 @@ async def druzyny(ctx):
 
 @bot.command()
 async def start(ctx):
+    # Sprawdzamy czy trwa runda bonusowa
+    if draft.bonus_round_started and draft.bonus_end_time and datetime.utcnow() < draft.bonus_end_time:
+        remaining = draft.bonus_end_time - datetime.utcnow()
+        mins = int(remaining.total_seconds() // 60)
+        secs = int(remaining.total_seconds() % 60)
+        await ctx.send(f"Nie można rozpocząć nowego draftu - trwa runda dodatkowa (pozostało {mins}m {secs}s)")
+        return
+
     if draft.draft_started or draft.team_draft_started:
         await ctx.send("Draft już trwa!")
         return
@@ -228,22 +237,18 @@ async def start_player_draft(channel):
     await next_pick(channel)
 
 async def next_pick(channel):
-    # Sprawdzamy czy zakończyliśmy wszystkie rundy
     if draft.current_round >= draft.total_rounds:
         await finish_main_draft(channel)
         return
 
-    # Sprawdzamy, czy wszyscy gracze zakończyli swoją kolej w tej rundzie
     if draft.current_index >= len(draft.players):
         draft.current_round += 1
         draft.current_index = 0
         
-        # Sprawdzamy czy osiągnęliśmy limit rund PO zwiększeniu licznika
         if draft.current_round >= draft.total_rounds:
             await finish_main_draft(channel)
             return
         
-        # Jeśli nie, kontynuujemy z nową rundą
         if draft.current_round > 0:
             draft.players.reverse()
             await channel.send(f"🔄 **ROTACJA KOLEJNOŚCI** - Nowa runda #{draft.current_round + 1}")
@@ -283,11 +288,13 @@ async def finish_main_draft(channel):
     draft.bonus_round_started = True
     draft.bonus_round_players.clear()
     draft.bonus_deadline = datetime.utcnow() + BONUS_SIGNUP_TIME
+    draft.bonus_end_time = datetime.utcnow() + BONUS_SIGNUP_TIME + BONUS_SELECTION_TIME  # Ustawiamy całkowity czas trwania rundy bonusowej
     
     await channel.send(
         "🏁 **Draft podstawowy zakończony!**\n\n"
         "Rozpoczyna się runda dodatkowa. Wpisz **!bonus** w ciągu następnych "
-        f"**{BONUS_SIGNUP_TIME.seconds//60} minut**, aby wybrać dodatkowych 5 zawodników."
+        f"**{BONUS_SIGNUP_TIME.seconds//60} minut**, aby wybrać dodatkowych 5 zawodników.\n"
+        f"Nowy draft będzie można rozpocząć o {draft.bonus_end_time.strftime('%H:%M')}"
     )
     
     if draft.pick_timer_task:
@@ -316,6 +323,7 @@ async def bonus_registration_timer(channel):
                 "🏆 **Draft oficjalnie zakończony!**"
             )
             draft.bonus_round_started = False
+            draft.bonus_end_time = None
 
 @bot.command()
 async def bonus(ctx):
@@ -385,6 +393,7 @@ async def wybieram_bonus(ctx, *, choice):
     
     if not draft.bonus_round_players:
         draft.bonus_round_started = False
+        draft.bonus_end_time = None
         await ctx.send("🏆 **Wszystkie wybory zostały dokonane. Draft oficjalnie zakończony!**")
 
 @bot.command()
@@ -503,6 +512,7 @@ async def reset(ctx):
     draft.picked_players = {u.lower(): [] for u in ["Wenoid", "wordlifepl"]}
     draft.user_teams.clear()
     draft.bonus_round_players.clear()
+    draft.bonus_end_time = None
 
     if draft.pick_timer_task:
         draft.pick_timer_task.cancel()
@@ -515,14 +525,23 @@ async def reset(ctx):
 
 @bot.command()
 async def czas(ctx):
-    if draft.bonus_round_started and draft.bonus_deadline:
-        remaining = draft.bonus_deadline - datetime.utcnow()
-        if remaining.total_seconds() <= 0:
-            return await ctx.send("⏰ Czas na rejestrację do rundy dodatkowej minął! Zarejestrowani gracze mogą teraz wybierać dodatkowych zawodników.")
+    if draft.bonus_round_started:
+        if datetime.utcnow() > draft.bonus_deadline and draft.bonus_end_time:
+            remaining = draft.bonus_end_time - datetime.utcnow()
+            if remaining.total_seconds() > 0:
+                mins, sec = divmod(int(remaining.total_seconds()), 60)
+                await ctx.send(f"⏳ Pozostały czas na wybór w rundzie dodatkowej: {mins} minut i {sec:02d} sekund")
+                return
+            else:
+                await ctx.send("⏰ Runda dodatkowa zakończona!")
+                return
         
-        mins, sec = divmod(int(remaining.total_seconds()), 60)
-        await ctx.send(f"⏳ Pozostały czas na rejestrację do rundy dodatkowej: {mins} minut i {sec:02d} sekund")
-        return
+        if draft.bonus_deadline:
+            remaining = draft.bonus_deadline - datetime.utcnow()
+            if remaining.total_seconds() > 0:
+                mins, sec = divmod(int(remaining.total_seconds()), 60)
+                await ctx.send(f"⏳ Pozostały czas na rejestrację do rundy dodatkowej: {mins} minut i {sec:02d} sekund")
+                return
     
     if not (draft.draft_started or draft.team_draft_started) or not draft.pick_deadline:
         return await ctx.send("Brak aktywnych timerów")
@@ -541,6 +560,27 @@ async def czas(ctx):
     await ctx.send(f"⏳ Pozostały czas: {time_str}")
 
 @bot.command()
+async def bonusstatus(ctx):
+    """Pokazuje status rundy dodatkowej"""
+    if draft.bonus_round_started:
+        if datetime.utcnow() > draft.bonus_deadline and draft.bonus_end_time:
+            remaining = draft.bonus_end_time - datetime.utcnow()
+            if remaining.total_seconds() > 0:
+                mins, sec = divmod(int(remaining.total_seconds()), 60)
+                await ctx.send(f"⏳ Runda dodatkowa - czas na wybór: {mins} minut i {sec:02d} sekund")
+            else:
+                await ctx.send("⏰ Runda dodatkowa zakończona!")
+        elif draft.bonus_deadline:
+            remaining = draft.bonus_deadline - datetime.utcnow()
+            if remaining.total_seconds() > 0:
+                mins, sec = divmod(int(remaining.total_seconds()), 60)
+                await ctx.send(f"⏳ Runda dodatkowa - czas na rejestrację: {mins} minut i {sec:02d} sekund")
+            else:
+                await ctx.send("🔄 Runda dodatkowa - czas na wybór zawodników")
+    else:
+        await ctx.send("ℹ️ Brak aktywnej rundy dodatkowej")
+
+@bot.command()
 async def lubicz(ctx):
     await ctx.send("https://i.ibb.co/tw1tD1Ny/412206195-1406350803614829-5742951929454962748-n-removebg-preview-1.png")
 
@@ -552,10 +592,11 @@ async def komar(ctx):
 async def pomoc(ctx):
     help_msg = [
         "**📋 Lista komend:**",
-        "• `!start` - Rozpoczyna draft",
+        "• `!start` - Rozpoczyna draft (zablokowane podczas rundy dodatkowej)",
+        "• `!bonus` - Zapisuje Cię do rundy dodatkowej",
+        "• `!bonusstatus` - Pokazuje status rundy dodatkowej",
         "• `!druzyny` - Pokazuje dostępne drużyny",
         "• `!wybieram [drużyna/zawodnicy]` - Wybiera drużynę lub zawodników",
-        "• `!bonus` - Zapisuje Cię do rundy dodatkowej",
         "• `!wybieram_bonus [zawodnicy]` - Wybiera dodatkowych zawodników",
         "• `!lista` - Pokazuje wybranych zawodników",
         "• `!czas` - Pokazuje pozostały czas",
