@@ -104,7 +104,6 @@ async def schedule_reminders(channel, user, deadline):
         for when, msg in reminders 
         if (when - datetime.utcnow()).total_seconds() > 0
     ]
-    ]
 
 async def send_reminder(channel, user, msg, wait_time):
     await asyncio.sleep(wait_time)
