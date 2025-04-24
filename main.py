@@ -240,7 +240,6 @@ async def next_pick(channel):
     player = draft.players[draft.current_index]
     team = draft.user_teams.get(player.display_name.lower(), "Nieznana")
     
-    # Dokładnie 3 rundy po 1 zawodnika i 5 rund po 3 zawodników
     picks_per_player = 1 if draft.current_round < 3 else 3
     
     await channel.send(
