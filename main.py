@@ -25,7 +25,7 @@ class DraftState:
         self.players: List[discord.Member] = []
         self.current_index: int = 0
         self.current_round: int = 0
-        self.total_rounds: int = 8  # 3 rundy po 1 zawodnika + 5 rund po 3 zawodników = 18 zawodników
+        self.total_rounds: int = 8  # 3 rundy po 1 zawodnika + 5 rund po 3 zawodników
         self.picked_numbers: Set[int] = set()
         self.picked_players: Dict[str, List[int]] = {}
         self.user_teams: Dict[str, str] = {}
