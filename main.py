@@ -228,18 +228,26 @@ async def start_player_draft(channel):
     await next_pick(channel)
 
 async def next_pick(channel):
+    # Sprawdzamy czy zakończyliśmy wszystkie rundy
     if draft.current_round >= draft.total_rounds:
         await finish_main_draft(channel)
         return
 
+    # Sprawdzamy, czy wszyscy gracze zakończyli swoją kolej w tej rundzie
     if draft.current_index >= len(draft.players):
         draft.current_round += 1
         draft.current_index = 0
         
+        # Sprawdzamy czy osiągnęliśmy limit rund PO zwiększeniu licznika
+        if draft.current_round >= draft.total_rounds:
+            await finish_main_draft(channel)
+            return
+        
+        # Jeśli nie, kontynuujemy z nową rundą
         if draft.current_round > 0:
             draft.players.reverse()
             await channel.send(f"🔄 **ROTACJA KOLEJNOŚCI** - Nowa runda #{draft.current_round + 1}")
-
+            
     player = draft.players[draft.current_index]
     team = draft.user_teams.get(player.display_name.lower(), "Nieznana")
     
