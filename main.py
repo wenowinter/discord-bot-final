@@ -586,7 +586,7 @@ async def lubicz(ctx):
 
 @bot.command()
 async def komar(ctx):
-    await ctx.send("https://scontent.fpoz4-1.fna.fbcdn.net/v/t39.30808-6/462362759_3871042979836522_4405035252432652447_n.jpg?_nc_cat=103&ccb=1-7&_nc_sid=6ee11a&_nc_ohc=mLtEcPyAeiwQ7kNvwEQ0kN6&_nc_oc=AdkOQC_KOMghLeoWDifpuwrjt13CvuIDYUt3Vwps1vUGakoskHkkl6xSxqYDUbkbKpE&_nc_zt=23&_nc_ht=scontent.fpoz4-1.fna&_nc_gid=OomLe8A4aLtMLUmIYtQ5_w&oh=00_AfEO44DS7ODe3W_cjKgVEW1fij8-aEJAYKl9_RP6PzHPDQ&oe=680DD11A")
+    await ctx.send("https://i.ibb.co/zT3813dG/1746106198604.jpg")
 
 @bot.command()
 async def pomoc(ctx):
