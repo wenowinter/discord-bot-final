@@ -66,9 +66,12 @@ TEAM_COLORS = {
 }
 
 PLAYERS_URL = "https://gist.githubusercontent.com/wenowinter/31a3d22985e6171b06f15061a8c3613e/raw/50121c8b83d84e626b79caee280574d8d1033826/mekambe1.txt"
-SELECTION_TIME = timedelta(minutes=180)
-BONUS_SIGNUP_TIME = timedelta(minutes=10)
-BONUS_SELECTION_TIME = timedelta(minutes=180)
+SELECTION_TIME = timedelta(hours=16)  # Zmieniono na 16 godzin
+BONUS_SIGNUP_TIME = timedelta(hours=10)  # Zmieniono na 10 godzin
+BONUS_SELECTION_TIME = timedelta(hours=10)  # Zmieniono na 10 godzin
+
+# Lista uczestników
+PARTICIPANTS = ["Karlos", "MiszczPL89", "Szwedzik", "Wenoid", "mikoprotek", "MatteyG", "ANN0D0M1N1", "flap", "WordLifePL", "Mario001", "Pogoda"]
 
 # ========== FUNKCJE POMOCNICZE ========== #
 def find_member_by_name(members: List[discord.Member], name: str) -> discord.Member:
@@ -93,9 +96,9 @@ async def schedule_reminders(channel, user, deadline):
         task.cancel()
     
     reminders = [
-        (deadline - timedelta(minutes=60), "1 godzinę"),
-        (deadline - timedelta(minutes=30), "30 minut"), 
-        (deadline - timedelta(minutes=10), "10 minut")
+        (deadline - timedelta(hours=8), "8 godzin"),
+        (deadline - timedelta(hours=4), "4 godziny"), 
+        (deadline - timedelta(hours=1), "1 godzinę")
     ]
 
     draft.reminder_tasks = [
@@ -136,9 +139,9 @@ async def start(ctx):
     # Sprawdzamy czy trwa runda bonusowa
     if draft.bonus_round_started and draft.bonus_end_time and datetime.utcnow() < draft.bonus_end_time:
         remaining = draft.bonus_end_time - datetime.utcnow()
-        mins = int(remaining.total_seconds() // 60)
-        secs = int(remaining.total_seconds() % 60)
-        await ctx.send(f"Nie można rozpocząć nowego draftu - trwa runda dodatkowa (pozostało {mins}m {secs}s)")
+        hours = int(remaining.total_seconds() // 3600)
+        mins = int((remaining.total_seconds() % 3600) // 60)
+        await ctx.send(f"Nie można rozpocząć nowego draftu - trwa runda dodatkowa (pozostało {hours}h {mins}m)")
         return
 
     if draft.draft_started or draft.team_draft_started:
@@ -149,16 +152,16 @@ async def start(ctx):
     draft.current_team_selector_index = 0
     draft.user_teams.clear()
 
-    order = "\n".join(f"{i+1}. {name}" for i, name in enumerate(["Wenoid", "wordlifepl"]))
+    order = "\n".join(f"{i+1}. {name}" for i, name in enumerate(PARTICIPANTS))
     await ctx.send(f"Rozpoczynamy wybór drużyn! Kolejność:\n{order}")
     await next_team_selection(ctx.channel)
 
 async def next_team_selection(channel):
-    if draft.current_team_selector_index >= len(["Wenoid", "wordlifepl"]):
+    if draft.current_team_selector_index >= len(PARTICIPANTS):
         await finish_team_selection(channel)
         return
 
-    selector_name = ["Wenoid", "wordlifepl"][draft.current_team_selector_index]
+    selector_name = PARTICIPANTS[draft.current_team_selector_index]
     selector = find_member_by_name(channel.guild.members, selector_name)
     
     if not selector:
@@ -171,7 +174,7 @@ async def next_team_selection(channel):
                 if t.lower() not in [t.lower() for t in draft.user_teams.values()]]
 
     await channel.send(
-        f"{selector.mention}, wybierz drużynę ({SELECTION_TIME.seconds//60} minut):\n"
+        f"{selector.mention}, wybierz drużynę ({SELECTION_TIME.seconds//3600} godzin):\n"
         f"Dostępne drużyny - użyj `!druzyny` aby zobaczyć listę\n"
         f"Użyj `!wybieram [nazwa]` np. `!wybieram Liverpool`"
     )
@@ -188,8 +191,8 @@ async def team_selection_timer(channel, selector):
     await asyncio.sleep((draft.pick_deadline - datetime.utcnow()).total_seconds())
     
     if (draft.team_draft_started and 
-        draft.current_team_selector_index < len(["Wenoid", "wordlifepl"]) and
-        ["Wenoid", "wordlifepl"][draft.current_team_selector_index].lower() == selector.display_name.lower()):
+        draft.current_team_selector_index < len(PARTICIPANTS) and
+        PARTICIPANTS[draft.current_team_selector_index].lower() == selector.display_name.lower()):
         
         available = [t for t in TEAM_COLORS 
                     if t.lower() not in [t.lower() for t in draft.user_teams.values()]]
@@ -217,7 +220,7 @@ async def finish_team_selection(channel):
 async def start_player_draft(channel):
     draft.players = [
         find_member_by_name(channel.guild.members, name)
-        for name in ["Wenoid", "wordlifepl"]
+        for name in PARTICIPANTS
     ]
     
     if None in draft.players:
@@ -228,7 +231,7 @@ async def start_player_draft(channel):
     draft.current_index = 0
     draft.current_round = 0
     draft.picked_numbers.clear()
-    draft.picked_players = {u.lower(): [] for u in ["Wenoid", "wordlifepl"]}
+    draft.picked_players = {u.lower(): [] for u in PARTICIPANTS}
 
     await channel.send(
         "**Kolejność wyboru zawodników:**\n" +
@@ -260,7 +263,7 @@ async def next_pick(channel):
     
     await channel.send(
         f"{''.join(TEAM_COLORS.get(team, ['⚫']))} {player.mention}, wybierz "
-        f"{picks_per_player} zawodników ({SELECTION_TIME.seconds//60} minut)!"
+        f"{picks_per_player} zawodników ({SELECTION_TIME.seconds//3600} godzin)!"
     )
 
     draft.pick_deadline = datetime.utcnow() + SELECTION_TIME
@@ -293,7 +296,7 @@ async def finish_main_draft(channel):
     await channel.send(
         "🏁 **Draft podstawowy zakończony!**\n\n"
         "Rozpoczyna się runda dodatkowa. Wpisz **!bonus** w ciągu następnych "
-        f"**{BONUS_SIGNUP_TIME.seconds//60} minut**, aby wybrać dodatkowych 5 zawodników.\n"
+        f"**{BONUS_SIGNUP_TIME.seconds//3600} godzin**, aby wybrać dodatkowych 5 zawodników.\n"
         f"Nowy draft będzie można rozpocząć o {draft.bonus_end_time.strftime('%H:%M')}"
     )
     
@@ -313,7 +316,7 @@ async def bonus_registration_timer(channel):
             await channel.send(
                 f"⏰ Czas na rejestrację do rundy dodatkowej zakończony!\n"
                 f"Zarejestrowani gracze ({len(draft.bonus_round_players)}): {players_list}\n\n"
-                f"Macie **{BONUS_SELECTION_TIME.seconds//60} minut** na wybranie 5 dodatkowych zawodników.\n"
+                f"Macie **{BONUS_SELECTION_TIME.seconds//3600} godzin** na wybranie 5 dodatkowych zawodników.\n"
                 f"Użyjcie `!wybieram_bonus [numery zawodników]`"
             )
         else:
@@ -342,12 +345,13 @@ async def bonus(ctx):
     
     draft.bonus_round_players.add(user_id)
     remaining = (draft.bonus_deadline - datetime.utcnow()).total_seconds()
-    mins, secs = divmod(int(remaining), 60)
+    hours, remainder = divmod(int(remaining), 3600)
+    mins, secs = divmod(remainder, 60)
     
     await ctx.send(
         f"✅ {ctx.author.mention} został zarejestrowany do rundy dodatkowej!\n"
-        f"Pozostały czas na rejestrację: {mins} minut i {secs} sekund.\n"
-        f"Po zakończeniu rejestracji będziesz mieć {BONUS_SELECTION_TIME.seconds//60} minut na wybranie 5 dodatkowych zawodników."
+        f"Pozostały czas na rejestrację: {hours} godzin, {mins} minut i {secs} sekund.\n"
+        f"Po zakończeniu rejestracji będziesz mieć {BONUS_SELECTION_TIME.seconds//3600} godzin na wybranie 5 dodatkowych zawodników."
     )
 
 @bot.command()
@@ -406,11 +410,11 @@ async def wybieram(ctx, *, choice):
         await ctx.send("Draft nie jest aktywny. Użyj !start")
 
 async def handle_team_selection(ctx, choice):
-    if draft.current_team_selector_index >= len(["Wenoid", "wordlifepl"]):
+    if draft.current_team_selector_index >= len(PARTICIPANTS):
         await ctx.send("Wybór drużyn zakończony!")
         return
 
-    selector_name = ["Wenoid", "wordlifepl"][draft.current_team_selector_index]
+    selector_name = PARTICIPANTS[draft.current_team_selector_index]
     if ctx.author.display_name.lower() != selector_name.lower():
         await ctx.send("Nie twoja kolej!")
         return
@@ -509,7 +513,7 @@ async def reset(ctx):
     draft.current_round = 0
     draft.current_team_selector_index = 0
     draft.picked_numbers.clear()
-    draft.picked_players = {u.lower(): [] for u in ["Wenoid", "wordlifepl"]}
+    draft.picked_players = {u.lower(): [] for u in PARTICIPANTS}
     draft.user_teams.clear()
     draft.bonus_round_players.clear()
     draft.bonus_end_time = None
@@ -529,8 +533,9 @@ async def czas(ctx):
         if datetime.utcnow() > draft.bonus_deadline and draft.bonus_end_time:
             remaining = draft.bonus_end_time - datetime.utcnow()
             if remaining.total_seconds() > 0:
-                mins, sec = divmod(int(remaining.total_seconds()), 60)
-                await ctx.send(f"⏳ Pozostały czas na wybór w rundzie dodatkowej: {mins} minut i {sec:02d} sekund")
+                hours, remainder = divmod(int(remaining.total_seconds()), 3600)
+                mins, sec = divmod(remainder, 60)
+                await ctx.send(f"⏳ Pozostały czas na wybór w rundzie dodatkowej: {hours} godzin, {mins} minut i {sec:02d} sekund")
                 return
             else:
                 await ctx.send("⏰ Runda dodatkowa zakończona!")
@@ -539,8 +544,9 @@ async def czas(ctx):
         if draft.bonus_deadline:
             remaining = draft.bonus_deadline - datetime.utcnow()
             if remaining.total_seconds() > 0:
-                mins, sec = divmod(int(remaining.total_seconds()), 60)
-                await ctx.send(f"⏳ Pozostały czas na rejestrację do rundy dodatkowej: {mins} minut i {sec:02d} sekund")
+                hours, remainder = divmod(int(remaining.total_seconds()), 3600)
+                mins, sec = divmod(remainder, 60)
+                await ctx.send(f"⏳ Pozostały czas na rejestrację do rundy dodatkowej: {hours} godzin, {mins} minut i {sec:02d} sekund")
                 return
     
     if not (draft.draft_started or draft.team_draft_started) or not draft.pick_deadline:
@@ -550,13 +556,10 @@ async def czas(ctx):
     if remaining.total_seconds() <= 0:
         return await ctx.send("⏰ Czas minął!")
 
-    mins, sec = divmod(int(remaining.total_seconds()), 60)
-    hours, mins = divmod(mins, 60)
+    hours, remainder = divmod(int(remaining.total_seconds()), 3600)
+    mins, sec = divmod(remainder, 60)
     
-    time_str = (
-        f"{hours} godzin, {mins} minut i {sec:02d} sekund" if hours else
-        f"{mins} minut i {sec:02d} sekund"
-    )
+    time_str = f"{hours} godzin, {mins} minut i {sec:02d} sekund"
     await ctx.send(f"⏳ Pozostały czas: {time_str}")
 
 @bot.command()
@@ -566,15 +569,17 @@ async def bonusstatus(ctx):
         if datetime.utcnow() > draft.bonus_deadline and draft.bonus_end_time:
             remaining = draft.bonus_end_time - datetime.utcnow()
             if remaining.total_seconds() > 0:
-                mins, sec = divmod(int(remaining.total_seconds()), 60)
-                await ctx.send(f"⏳ Runda dodatkowa - czas na wybór: {mins} minut i {sec:02d} sekund")
+                hours, remainder = divmod(int(remaining.total_seconds()), 3600)
+                mins, sec = divmod(remainder, 60)
+                await ctx.send(f"⏳ Runda dodatkowa - czas na wybór: {hours} godzin, {mins} minut i {sec:02d} sekund")
             else:
                 await ctx.send("⏰ Runda dodatkowa zakończona!")
         elif draft.bonus_deadline:
             remaining = draft.bonus_deadline - datetime.utcnow()
             if remaining.total_seconds() > 0:
-                mins, sec = divmod(int(remaining.total_seconds()), 60)
-                await ctx.send(f"⏳ Runda dodatkowa - czas na rejestrację: {mins} minut i {sec:02d} sekund")
+                hours, remainder = divmod(int(remaining.total_seconds()), 3600)
+                mins, sec = divmod(remainder, 60)
+                await ctx.send(f"⏳ Runda dodatkowa - czas na rejestrację: {hours} godzin, {mins} minut i {sec:02d} sekund")
             else:
                 await ctx.send("🔄 Runda dodatkowa - czas na wybór zawodników")
     else:
