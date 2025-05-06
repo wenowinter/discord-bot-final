@@ -28,10 +28,22 @@ class DraftState:
         self.total_rounds: int = 8
         self.picked_numbers: Set[int] = set()
         self.picked_players: Dict[str, List[int]] = {}
-        self.user_teams: Dict[str, str] = {}
+        self.user_teams: Dict[str, str] = {
+            "karlos": "Arsenal",          # 🔴⚪
+            "miszczpl89": "Barcelona",    # 🔵🔴
+            "szwedzik": "Man United",     # 🔴⚫
+            "wenoid": "Jagiellonia",      # 🟡🔴
+            "mikoprotek": "Inter",        # 🔵⚫
+            "matteyg": "AS Roma",         # 🔴🟠
+            "ann0d0m1n1": "Real Madryt",  # ⚪🟣
+            "flap": "Borussia",           # 🟡⚫
+            "wordlifepl": "Renopuren",    # 🔵⚪
+            "mario001": "Man City",       # 🔵⚪
+            "pogoda": "Legia"             # 🟢⚪
+        }
         self.players_database: Dict[int, str] = {}
         self.draft_started: bool = False
-        self.team_draft_started: bool = False
+        self.team_draft_started: bool = True  # Od razu "wybór drużyn zakończony"
         self.current_team_selector_index: int = 0
         self.pick_deadline: datetime = None
         self.pick_timer_task = None
@@ -65,26 +77,11 @@ TEAM_COLORS = {
     "AS Roma": ["🔴", "🟠"]
 }
 
-# NOWY SŁOWNIK - STAŁE PRZYPISANIE DRUŻYN
-PRZYPISANE_DRUZYNY = {
-    "karlos2": "Arsenal",          # 🔴⚪
-    "miszczpl89": "Barcelona",    # 🔵🔴
-    "szwedzik": "Man United",     # 🔴⚫
-    "wenoid": "Jagiellonia",      # 🟡🔴
-    "mikoprotek": "Inter",        # 🔵⚫
-    "matteyg": "AS Roma",         # 🔴🟠
-    "ann0d0m1n1": "Real Madryt",  # ⚪🟣
-    "flap": "Borussia",           # 🟡⚫
-    "wordlifepl": "Renopuren",    # 🔵⚪
-    "mario001": "Man City",       # 🔵⚪
-    "pogoda": "Legia"             # 🟢⚪
-}
-
 PLAYERS_URL = "https://gist.githubusercontent.com/wenowinter/31a3d22985e6171b06f15061a8c3613e/raw/50121c8b83d84e626b79caee280574d8d1033826/mekambe1.txt"
 SELECTION_TIME = timedelta(hours=16)
 BONUS_SIGNUP_TIME = timedelta(hours=10)
 BONUS_SELECTION_TIME = timedelta(hours=10)
-PARTICIPANTS = list(PRZYPISANE_DRUZYNY.keys())  # Używa kluczy ze słownika
+PARTICIPANTS = list(draft.user_teams.keys())  # Używa przypisanych graczy
 
 # ========== FUNKCJE POMOCNICZE ========== #
 def find_member_by_name(members: List[discord.Member], name: str) -> discord.Member:
@@ -147,7 +144,6 @@ async def druzyny(ctx):
     
     await ctx.send("**Dostępne drużyny:**\n" + "\n".join(teams_info))
 
-# ZMODYFIKOWANA KOMENDA START - AUTOMATYCZNE PRZYPISANIE DRUŻYN
 @bot.command()
 async def start(ctx):
     if draft.bonus_round_started and draft.bonus_end_time and datetime.utcnow() < draft.bonus_end_time:
@@ -157,21 +153,13 @@ async def start(ctx):
         await ctx.send(f"Nie można rozpocząć nowego draftu - trwa runda dodatkowa (pozostało {hours}h {mins}m)")
         return
 
-    if draft.draft_started or draft.team_draft_started:
+    if draft.draft_started:
         await ctx.send("Draft już trwa!")
         return
 
-    # Automatyczne przypisanie drużyn
-    draft.user_teams = PRZYPISANE_DRUZYNY.copy()
-    draft.team_draft_started = True
-
-    # Pokaz podsumowanie
-    summary = ["**Drużyny przypisane automatycznie:**"] + [
-        f"{''.join(TEAM_COLORS.get(t, ['⚫']))} {u}: {t}" 
-        for u, t in PRZYPISANE_DRUZYNY.items()
-    ]
-    await ctx.send("\n".join(summary))
-    await start_player_draft(ctx.channel)  # Od razu zacznij draft zawodników
+    # Pomijamy etap wyboru drużyn - od razu zaczynamy draft zawodników
+    await ctx.send("**Rozpoczynamy draft zawodników!** (Drużyny już przypisane)")
+    await start_player_draft(ctx.channel)
 
 async def start_player_draft(channel):
     draft.players = [
@@ -180,7 +168,8 @@ async def start_player_draft(channel):
     ]
     
     if None in draft.players:
-        await channel.send("Nie znaleziono wszystkich graczy!")
+        missing = [name for name, member in zip(PARTICIPANTS, draft.players) if member is None]
+        await channel.send(f"❌ Nie znaleziono graczy: {', '.join(missing)}")
         return
 
     draft.draft_started = True
