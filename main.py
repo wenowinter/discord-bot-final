@@ -149,7 +149,7 @@ async def force_draft(ctx):
     
     # 2. Ręcznie przypisz drużyny (wg Twojej listy)
     draft.user_teams = {
-        "karlos": "Arsenal",
+        "karlos2": "Arsenal",
         "miszczpl89": "Barcelona",
         "szwedzik": "Man United",
         "wenoid": "Jagiellonia",
