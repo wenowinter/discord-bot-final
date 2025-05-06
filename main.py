@@ -43,7 +43,7 @@ class DraftState:
         }
         self.players_database: Dict[int, str] = {}
         self.draft_started: bool = False
-        self.team_draft_started: bool = True  # Od razu "wybór drużyn zakończony"
+        self.team_draft_started: bool = True  # POMIJAMY WYBÓR DRUŻYN
         self.current_team_selector_index: int = 0
         self.pick_deadline: datetime = None
         self.pick_timer_task = None
@@ -86,7 +86,7 @@ PARTICIPANTS = list(draft.user_teams.keys())  # Używa przypisanych graczy
 # ========== FUNKCJE POMOCNICZE ========== #
 def find_member_by_name(members: List[discord.Member], name: str) -> discord.Member:
     name_lower = name.lower()
-    return next((m for m in members if m.display_name.lower() == name_lower), None)
+    return next((m for m in members if name_lower in m.display_name.lower()), None)  # Szuka nawet częściowego dopasowania
 
 async def load_players() -> Dict[int, str]:
     try:
@@ -133,51 +133,7 @@ async def on_ready():
         type=discord.ActivityType.watching,
         name="!pomoc"
     ))
-    
-# ========== KOMENDY AWARYJNE ========== #
-@bot.command(name='force_draft')
-@commands.has_permissions(administrator=True)
-async def force_draft(ctx):
-    """RĘCZNA NAPRAWA: Wymusza draft zawodników, omijając wszystkie checksy"""
-    # 1. Zresetuj stan
-    draft.draft_started = True
-    draft.team_draft_started = True
-    draft.current_index = 0
-    draft.current_round = 0
-    draft.picked_numbers.clear()
-    draft.picked_players = {name.lower(): [] for name in PARTICIPANTS}
-    
-    # 2. Ręcznie przypisz drużyny (wg Twojej listy)
-    draft.user_teams = {
-        "karlos2": "Arsenal",
-        "miszczpl89": "Barcelona",
-        "szwedzik": "Man United",
-        "wenoid": "Jagiellonia",
-        "mikoprotek": "Inter",
-        "matteyg": "AS Roma",
-        "ann0d0m1n1": "Real Madryt",
-        "flap": "Borussia",
-        "wordlifepl": "Renopuren",
-        "mario001": "Man City",
-        "pogoda": "Legia"
-    }
-    
-    # 3. Wymuś rozpoczęcie
-    await ctx.send("🚀 **WYMUSZONO DRAFT ZAWODNIKÓW!** Teraz działa `!wybieram [numery]`")
-    await start_player_draft(ctx.channel)
 
-@bot.command(name='debug')
-async def debug(ctx):
-    """Pokazuje aktualny stan draftu"""
-    status = (
-        f"**Draft started:** {draft.draft_started}\n"
-        f"**Team draft started:** {draft.team_draft_started}\n"
-        f"**Current index:** {draft.current_index}\n"
-        f"**Przypisane drużyny:**\n" + 
-        "\n".join([f"- {k}: {v}" for k,v in draft.user_teams.items()])
-    )
-    await ctx.send(status)
-    
 @bot.command()
 async def druzyny(ctx):
     teams_info = []
@@ -190,6 +146,7 @@ async def druzyny(ctx):
 
 @bot.command()
 async def start(ctx):
+    """Rozpoczyna draft od razu od wyboru zawodników (pomija wybór drużyn)"""
     if draft.bonus_round_started and draft.bonus_end_time and datetime.utcnow() < draft.bonus_end_time:
         remaining = draft.bonus_end_time - datetime.utcnow()
         hours = int(remaining.total_seconds() // 3600)
@@ -201,32 +158,26 @@ async def start(ctx):
         await ctx.send("Draft już trwa!")
         return
 
-    # Pomijamy etap wyboru drużyn - od razu zaczynamy draft zawodników
-    await ctx.send("**Rozpoczynamy draft zawodników!** (Drużyny już przypisane)")
-    await start_player_draft(ctx.channel)
-
-async def start_player_draft(channel):
+    # Pomiń wybór drużyn - od razu zaczynamy draft zawodników
+    draft.draft_started = True
     draft.players = [
-        find_member_by_name(channel.guild.members, name)
+        find_member_by_name(ctx.guild.members, name)
         for name in PARTICIPANTS
     ]
     
     if None in draft.players:
         missing = [name for name, member in zip(PARTICIPANTS, draft.players) if member is None]
-        await channel.send(f"❌ Nie znaleziono graczy: {', '.join(missing)}")
+        await ctx.send(f"❌ Nie znaleziono graczy: {', '.join(missing)}")
         return
 
-    draft.draft_started = True
-    draft.current_index = 0
-    draft.current_round = 0
-    draft.picked_numbers.clear()
-    draft.picked_players = {u.lower(): [] for u in PARTICIPANTS}
-
-    await channel.send(
-        "**Kolejność wyboru zawodników:**\n" +
+    await ctx.send(
+        "🏁 **Rozpoczynamy draft zawodników!**\n"
+        "**Przypisane drużyny:**\n" +
+        "\n".join([f"- {name}: {team}" for name, team in draft.user_teams.items()]) +
+        "\n\n**Kolejność wyboru:**\n" +
         "\n".join(f"{i+1}. {p.display_name}" for i, p in enumerate(draft.players))
     )
-    await next_pick(channel)
+    await next_pick(ctx.channel)
 
 async def next_pick(channel):
     if draft.current_round >= draft.total_rounds:
@@ -280,13 +231,12 @@ async def finish_main_draft(channel):
     draft.bonus_round_started = True
     draft.bonus_round_players.clear()
     draft.bonus_deadline = datetime.utcnow() + BONUS_SIGNUP_TIME
-    draft.bonus_end_time = datetime.utcnow() + BONUS_SIGNUP_TIME + BONUS_SELECTION_TIME  # Ustawiamy całkowity czas trwania rundy bonusowej
+    draft.bonus_end_time = datetime.utcnow() + BONUS_SIGNUP_TIME + BONUS_SELECTION_TIME
     
     await channel.send(
         "🏁 **Draft podstawowy zakończony!**\n\n"
         "Rozpoczyna się runda dodatkowa. Wpisz **!bonus** w ciągu następnych "
-        f"**{BONUS_SIGNUP_TIME.seconds//3600} godzin**, aby wybrać dodatkowych 5 zawodników.\n"
-        f"Nowy draft będzie można rozpocząć o {draft.bonus_end_time.strftime('%H:%M')}"
+        f"**{BONUS_SIGNUP_TIME.seconds//3600} godzin**, aby wybrać dodatkowych 5 zawodników."
     )
     
     if draft.pick_timer_task:
@@ -315,7 +265,6 @@ async def bonus_registration_timer(channel):
                 "🏆 **Draft oficjalnie zakończony!**"
             )
             draft.bonus_round_started = False
-            draft.bonus_end_time = None
 
 @bot.command()
 async def bonus(ctx):
@@ -386,41 +335,14 @@ async def wybieram_bonus(ctx, *, choice):
     
     if not draft.bonus_round_players:
         draft.bonus_round_started = False
-        draft.bonus_end_time = None
         await ctx.send("🏆 **Wszystkie wybory zostały dokonane. Draft oficjalnie zakończony!**")
 
 @bot.command()
 async def wybieram(ctx, *, choice):
-    if draft.team_draft_started:
-        await handle_team_selection(ctx, choice)
-    elif draft.draft_started:
+    if draft.draft_started:
         await handle_player_selection(ctx, choice)
     else:
         await ctx.send("Draft nie jest aktywny. Użyj !start")
-
-async def handle_team_selection(ctx, choice):
-    if draft.current_team_selector_index >= len(PARTICIPANTS):
-        await ctx.send("Wybór drużyn zakończony!")
-        return
-
-    selector_name = PARTICIPANTS[draft.current_team_selector_index]
-    if ctx.author.display_name.lower() != selector_name.lower():
-        await ctx.send("Nie twoja kolej!")
-        return
-
-    selected = next((t for t in TEAM_COLORS if t.lower() == choice.lower()), None)
-    if not selected:
-        return await ctx.send("Nie ma takiej drużyny! Użyj !druzyny")
-
-    if selected.lower() in [t.lower() for t in draft.user_teams.values()]:
-        return await ctx.send("Drużyna już wybrana!")
-
-    draft.user_teams[ctx.author.display_name.lower()] = selected
-    await ctx.send(
-        f"{ctx.author.display_name} wybrał: {''.join(TEAM_COLORS.get(selected, ['⚫']))} {selected}"
-    )
-    draft.current_team_selector_index += 1
-    await next_team_selection(ctx.channel)
 
 async def handle_player_selection(ctx, choice):
     if not draft.draft_started or draft.current_index >= len(draft.players):
@@ -495,7 +417,7 @@ async def reset(ctx):
         return await ctx.send("❌ Tylko administrator może zresetować draft")
 
     draft.draft_started = False
-    draft.team_draft_started = False
+    draft.team_draft_started = True  # Nadal pomijamy wybór drużyn
     draft.bonus_round_started = False
     draft.players.clear()
     draft.current_index = 0
@@ -503,7 +425,6 @@ async def reset(ctx):
     draft.current_team_selector_index = 0
     draft.picked_numbers.clear()
     draft.picked_players = {u.lower(): [] for u in PARTICIPANTS}
-    draft.user_teams.clear()
     draft.bonus_round_players.clear()
     draft.bonus_end_time = None
 
@@ -514,7 +435,7 @@ async def reset(ctx):
         task.cancel()
     draft.reminder_tasks.clear()
 
-    await ctx.send("Draft zresetowany.")
+    await ctx.send("Draft zresetowany. Użyj !start, aby rozpocząć nowy draft.")
 
 @bot.command()
 async def czas(ctx):
@@ -582,53 +503,24 @@ async def lubicz(ctx):
 async def komar(ctx):
     await ctx.send("https://i.ibb.co/zT3813dG/1746106198604.jpg")
 
-# ... (Twój istniejący kod pozostaje DOKŁADNIE taki sam aż do komendy !pomoc)
-
 @bot.command()
 async def pomoc(ctx):
     help_msg = [
         "**📋 Lista komend:**",
-        "• `!start` - Rozpoczyna draft (zablokowane podczas rundy dodatkowej)",
+        "• `!start` - Rozpoczyna draft (pomija wybór drużyn)",
         "• `!bonus` - Zapisuje Cię do rundy dodatkowej",
         "• `!bonusstatus` - Pokazuje status rundy dodatkowej",
         "• `!druzyny` - Pokazuje dostępne drużyny",
-        "• `!wybieram [drużyna/zawodnicy]` - Wybiera drużynę lub zawodników",
-        "• `!wybieram_bonus [zawodnicy]` - Wybiera dodatkowych zawodników",
+        "• `!wybieram [numery]` - Wybiera zawodników (np. `!wybieram 1575, 42`)",
+        "• `!wybieram_bonus [numery]` - Wybiera dodatkowych zawodników",
         "• `!lista` - Pokazuje wybranych zawodników",
         "• `!czas` - Pokazuje pozostały czas",
         "• `!pomoc` - Ta wiadomość",
         "• `!lubicz` - Obrazek Lubicz",
         "• `!komar` - Obrazek Komar",
-        "• `!reset` - Resetuje draft (admin)",
-        "• `!napraw_karlosa [nowy_nick]` - Naprawia pierwszego gracza (admin)"  # DODANE
+        "• `!reset` - Resetuje draft (admin)"
     ]
     await ctx.send("\n".join(help_msg))
-
-# ===== NOWA KOMENDA ===== #
-@bot.command(name='napraw_karlosa')
-@commands.has_permissions(administrator=True)
-async def napraw_karlosa(ctx, nowy_nick: str):
-    """Zamienia starego Karlosa (pierwszego gracza) na nowego"""
-    if not draft.players:
-        return await ctx.send("❌ Lista graczy jest pusta!")
-    
-    nowy_karlos = find_member_by_name(ctx.guild.members, nowy_nick)
-    if not nowy_karlos:
-        return await ctx.send(f"❌ Nie znaleziono gracza o nicku '{nowy_nick}'!")
-    
-    stary_karlos = draft.players[0]
-    draft.players[0] = nowy_karlos
-    
-    stary_nick = stary_karlos.display_name.lower()
-    if stary_nick in draft.user_teams:
-        draft.user_teams[nowy_karlos.display_name.lower()] = draft.user_teams.pop(stary_nick)
-    
-    await ctx.send(
-        f"✅ Pomyślnie zamieniono {stary_karlos.display_name} na {nowy_karlos.display_name}!\n"
-        f"Nowy Karlos przejmuje:"
-        f"\n- Kolejność w drafcie"
-        f"\n- Przypisaną drużynę (jeśli była)"
-    )
 
 # ========== URUCHOMIENIE BOTA ========== #
 if __name__ == '__main__':
