@@ -134,13 +134,49 @@ async def on_ready():
         name="!pomoc"
     ))
     
-@bot.command(name='force_players')
+# ========== KOMENDY AWARYJNE ========== #
+@bot.command(name='force_draft')
 @commands.has_permissions(administrator=True)
-async def force_players(ctx):
-    """Wymusza przejście do draftu zawodników"""
-    draft.team_draft_started = True  # Oznacz wybór drużyn jako zakończony
-    draft.draft_started = True       # Rozpocznij draft zawodników
-    await ctx.send("✅ Wymuszono rozpoczęcie draftu zawodników! Można używać !wybieram [numery]")
+async def force_draft(ctx):
+    """RĘCZNA NAPRAWA: Wymusza draft zawodników, omijając wszystkie checksy"""
+    # 1. Zresetuj stan
+    draft.draft_started = True
+    draft.team_draft_started = True
+    draft.current_index = 0
+    draft.current_round = 0
+    draft.picked_numbers.clear()
+    draft.picked_players = {name.lower(): [] for name in PARTICIPANTS}
+    
+    # 2. Ręcznie przypisz drużyny (wg Twojej listy)
+    draft.user_teams = {
+        "karlos": "Arsenal",
+        "miszczpl89": "Barcelona",
+        "szwedzik": "Man United",
+        "wenoid": "Jagiellonia",
+        "mikoprotek": "Inter",
+        "matteyg": "AS Roma",
+        "ann0d0m1n1": "Real Madryt",
+        "flap": "Borussia",
+        "wordlifepl": "Renopuren",
+        "mario001": "Man City",
+        "pogoda": "Legia"
+    }
+    
+    # 3. Wymuś rozpoczęcie
+    await ctx.send("🚀 **WYMUSZONO DRAFT ZAWODNIKÓW!** Teraz działa `!wybieram [numery]`")
+    await start_player_draft(ctx.channel)
+
+@bot.command(name='debug')
+async def debug(ctx):
+    """Pokazuje aktualny stan draftu"""
+    status = (
+        f"**Draft started:** {draft.draft_started}\n"
+        f"**Team draft started:** {draft.team_draft_started}\n"
+        f"**Current index:** {draft.current_index}\n"
+        f"**Przypisane drużyny:**\n" + 
+        "\n".join([f"- {k}: {v}" for k,v in draft.user_teams.items()])
+    )
+    await ctx.send(status)
     
 @bot.command()
 async def druzyny(ctx):
