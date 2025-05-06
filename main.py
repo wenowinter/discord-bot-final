@@ -25,7 +25,7 @@ class DraftState:
         self.players: List[discord.Member] = []
         self.current_index: int = 0
         self.current_round: int = 0
-        self.total_rounds: int = 8  # 3 rundy po 1 zawodnika + 5 rund po 3 zawodników
+        self.total_rounds: int = 8
         self.picked_numbers: Set[int] = set()
         self.picked_players: Dict[str, List[int]] = {}
         self.user_teams: Dict[str, str] = {}
@@ -39,7 +39,7 @@ class DraftState:
         self.bonus_round_started: bool = False
         self.bonus_round_players: Set[str] = set()
         self.bonus_deadline: datetime = None
-        self.bonus_end_time: datetime = None  # Czas zakończenia rundy bonusowej
+        self.bonus_end_time: datetime = None
 
 draft = DraftState()
 
@@ -65,13 +65,26 @@ TEAM_COLORS = {
     "AS Roma": ["🔴", "🟠"]
 }
 
-PLAYERS_URL = "https://gist.githubusercontent.com/wenowinter/31a3d22985e6171b06f15061a8c3613e/raw/50121c8b83d84e626b79caee280574d8d1033826/mekambe1.txt"
-SELECTION_TIME = timedelta(hours=16)  # Zmieniono na 16 godzin
-BONUS_SIGNUP_TIME = timedelta(hours=10)  # Zmieniono na 10 godzin
-BONUS_SELECTION_TIME = timedelta(hours=10)  # Zmieniono na 10 godzin
+# NOWY SŁOWNIK - STAŁE PRZYPISANIE DRUŻYN
+PRZYPISANE_DRUZYNY = {
+    "karlos": "Arsenal",          # 🔴⚪
+    "miszczpl89": "Barcelona",    # 🔵🔴
+    "szwedzik": "Man United",     # 🔴⚫
+    "wenoid": "Jagiellonia",      # 🟡🔴
+    "mikoprotek": "Inter",        # 🔵⚫
+    "matteyg": "AS Roma",         # 🔴🟠
+    "ann0d0m1n1": "Real Madryt",  # ⚪🟣
+    "flap": "Borussia",           # 🟡⚫
+    "wordlifepl": "Renopuren",    # 🔵⚪
+    "mario001": "Man City",       # 🔵⚪
+    "pogoda": "Legia"             # 🟢⚪
+}
 
-# Lista uczestników
-PARTICIPANTS = ["Karlos", "MiszczPL89", "Szwedzik", "Wenoid", "mikoprotek", "MatteyG", "ANN0D0M1N1", "flap", "WordLifePL", "Mario001", "Pogoda"]
+PLAYERS_URL = "https://gist.githubusercontent.com/wenowinter/31a3d22985e6171b06f15061a8c3613e/raw/50121c8b83d84e626b79caee280574d8d1033826/mekambe1.txt"
+SELECTION_TIME = timedelta(hours=16)
+BONUS_SIGNUP_TIME = timedelta(hours=10)
+BONUS_SELECTION_TIME = timedelta(hours=10)
+PARTICIPANTS = list(PRZYPISANE_DRUZYNY.keys())  # Używa kluczy ze słownika
 
 # ========== FUNKCJE POMOCNICZE ========== #
 def find_member_by_name(members: List[discord.Member], name: str) -> discord.Member:
@@ -134,9 +147,9 @@ async def druzyny(ctx):
     
     await ctx.send("**Dostępne drużyny:**\n" + "\n".join(teams_info))
 
+# ZMODYFIKOWANA KOMENDA START - AUTOMATYCZNE PRZYPISANIE DRUŻYN
 @bot.command()
 async def start(ctx):
-    # Sprawdzamy czy trwa runda bonusowa
     if draft.bonus_round_started and draft.bonus_end_time and datetime.utcnow() < draft.bonus_end_time:
         remaining = draft.bonus_end_time - datetime.utcnow()
         hours = int(remaining.total_seconds() // 3600)
@@ -148,74 +161,17 @@ async def start(ctx):
         await ctx.send("Draft już trwa!")
         return
 
+    # Automatyczne przypisanie drużyn
+    draft.user_teams = PRZYPISANE_DRUZYNY.copy()
     draft.team_draft_started = True
-    draft.current_team_selector_index = 0
-    draft.user_teams.clear()
 
-    order = "\n".join(f"{i+1}. {name}" for i, name in enumerate(PARTICIPANTS))
-    await ctx.send(f"Rozpoczynamy wybór drużyn! Kolejność:\n{order}")
-    await next_team_selection(ctx.channel)
-
-async def next_team_selection(channel):
-    if draft.current_team_selector_index >= len(PARTICIPANTS):
-        await finish_team_selection(channel)
-        return
-
-    selector_name = PARTICIPANTS[draft.current_team_selector_index]
-    selector = find_member_by_name(channel.guild.members, selector_name)
-    
-    if not selector:
-        await channel.send(f"Nie znaleziono: {selector_name}")
-        draft.current_team_selector_index += 1
-        return await next_team_selection(channel)
-
-    draft.pick_deadline = datetime.utcnow() + SELECTION_TIME
-    available = [f"{''.join(TEAM_COLORS[t])} {t}" for t in TEAM_COLORS 
-                if t.lower() not in [t.lower() for t in draft.user_teams.values()]]
-
-    await channel.send(
-        f"{selector.mention}, wybierz drużynę ({SELECTION_TIME.seconds//3600} godzin):\n"
-        f"Dostępne drużyny - użyj `!druzyny` aby zobaczyć listę\n"
-        f"Użyj `!wybieram [nazwa]` np. `!wybieram Liverpool`"
-    )
-
-    if draft.pick_timer_task:
-        draft.pick_timer_task.cancel()
-    
-    draft.pick_timer_task = asyncio.create_task(
-        team_selection_timer(channel, selector)
-    )
-    await schedule_reminders(channel, selector, draft.pick_deadline)
-
-async def team_selection_timer(channel, selector):
-    await asyncio.sleep((draft.pick_deadline - datetime.utcnow()).total_seconds())
-    
-    if (draft.team_draft_started and 
-        draft.current_team_selector_index < len(PARTICIPANTS) and
-        PARTICIPANTS[draft.current_team_selector_index].lower() == selector.display_name.lower()):
-        
-        available = [t for t in TEAM_COLORS 
-                    if t.lower() not in [t.lower() for t in draft.user_teams.values()]]
-        
-        if available:
-            selected = random.choice(available)
-            draft.user_teams[selector.display_name.lower()] = selected
-            await channel.send(
-                f"⏰ Czas minął! Przypisano {selector.mention} drużynę: {''.join(TEAM_COLORS.get(selected, ['⚫']))} {selected}"
-            )
-
-        draft.current_team_selector_index += 1
-        await next_team_selection(channel)
-
-async def finish_team_selection(channel):
-    draft.team_draft_started = False
-    summary = ["**Wybieranie drużyn zakończone!**"] + [
+    # Pokaz podsumowanie
+    summary = ["**Drużyny przypisane automatycznie:**"] + [
         f"{''.join(TEAM_COLORS.get(t, ['⚫']))} {u}: {t}" 
-        for u, t in draft.user_teams.items()
+        for u, t in PRZYPISANE_DRUZYNY.items()
     ]
-    
-    await channel.send("\n".join(summary))
-    await start_player_draft(channel)
+    await ctx.send("\n".join(summary))
+    await start_player_draft(ctx.channel)  # Od razu zacznij draft zawodników
 
 async def start_player_draft(channel):
     draft.players = [
