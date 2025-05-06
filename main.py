@@ -133,7 +133,15 @@ async def on_ready():
         type=discord.ActivityType.watching,
         name="!pomoc"
     ))
-
+    
+@bot.command(name='force_players')
+@commands.has_permissions(administrator=True)
+async def force_players(ctx):
+    """Wymusza przejście do draftu zawodników"""
+    draft.team_draft_started = True  # Oznacz wybór drużyn jako zakończony
+    draft.draft_started = True       # Rozpocznij draft zawodników
+    await ctx.send("✅ Wymuszono rozpoczęcie draftu zawodników! Można używać !wybieram [numery]")
+    
 @bot.command()
 async def druzyny(ctx):
     teams_info = []
