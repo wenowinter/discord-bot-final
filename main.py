@@ -593,6 +593,8 @@ async def lubicz(ctx):
 async def komar(ctx):
     await ctx.send("https://i.ibb.co/zT3813dG/1746106198604.jpg")
 
+# ... (Twój istniejący kod pozostaje DOKŁADNIE taki sam aż do komendy !pomoc)
+
 @bot.command()
 async def pomoc(ctx):
     help_msg = [
@@ -608,9 +610,36 @@ async def pomoc(ctx):
         "• `!pomoc` - Ta wiadomość",
         "• `!lubicz` - Obrazek Lubicz",
         "• `!komar` - Obrazek Komar",
-        "• `!reset` - Resetuje draft (admin)"
+        "• `!reset` - Resetuje draft (admin)",
+        "• `!napraw_karlosa [nowy_nick]` - Naprawia pierwszego gracza (admin)"  # DODANE
     ]
     await ctx.send("\n".join(help_msg))
+
+# ===== NOWA KOMENDA ===== #
+@bot.command(name='napraw_karlosa')
+@commands.has_permissions(administrator=True)
+async def napraw_karlosa(ctx, nowy_nick: str):
+    """Zamienia starego Karlosa (pierwszego gracza) na nowego"""
+    if not draft.players:
+        return await ctx.send("❌ Lista graczy jest pusta!")
+    
+    nowy_karlos = find_member_by_name(ctx.guild.members, nowy_nick)
+    if not nowy_karlos:
+        return await ctx.send(f"❌ Nie znaleziono gracza o nicku '{nowy_nick}'!")
+    
+    stary_karlos = draft.players[0]
+    draft.players[0] = nowy_karlos
+    
+    stary_nick = stary_karlos.display_name.lower()
+    if stary_nick in draft.user_teams:
+        draft.user_teams[nowy_karlos.display_name.lower()] = draft.user_teams.pop(stary_nick)
+    
+    await ctx.send(
+        f"✅ Pomyślnie zamieniono {stary_karlos.display_name} na {nowy_karlos.display_name}!\n"
+        f"Nowy Karlos przejmuje:"
+        f"\n- Kolejność w drafcie"
+        f"\n- Przypisaną drużynę (jeśli była)"
+    )
 
 # ========== URUCHOMIENIE BOTA ========== #
 if __name__ == '__main__':
