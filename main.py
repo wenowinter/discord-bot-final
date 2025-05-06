@@ -67,7 +67,7 @@ TEAM_COLORS = {
 
 # NOWY SŁOWNIK - STAŁE PRZYPISANIE DRUŻYN
 PRZYPISANE_DRUZYNY = {
-    "karlos": "Arsenal",          # 🔴⚪
+    "karlos2": "Arsenal",          # 🔴⚪
     "miszczpl89": "Barcelona",    # 🔵🔴
     "szwedzik": "Man United",     # 🔴⚫
     "wenoid": "Jagiellonia",      # 🟡🔴
