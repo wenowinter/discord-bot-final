@@ -29,7 +29,7 @@ class DraftState:
         self.picked_numbers: Set[int] = set()
         self.picked_players: Dict[str, List[int]] = {}
         self.user_teams: Dict[str, str] = {
-            "karlos": "Arsenal",          # 🔴⚪
+            "karlos2": "Arsenal",          # 🔴⚪
             "miszczpl89": "Barcelona",    # 🔵🔴
             "szwedzik": "Man United",     # 🔴⚫
             "wenoid": "Jagiellonia",      # 🟡🔴
