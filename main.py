@@ -29,17 +29,9 @@ class DraftState:
         self.picked_numbers: Set[int] = set()
         self.picked_players: Dict[str, List[int]] = {}
         self.user_teams: Dict[str, str] = {
-            "karlos2": "Arsenal",          # 🔴⚪
-            "miszczpl89": "Barcelona",    # 🔵🔴
-            "szwedzik": "Man United",     # 🔴⚫
-            "wenoid": "Jagiellonia",      # 🟡🔴
-            "mikoprotek": "Inter",        # 🔵⚫
-            "matteyg": "AS Roma",         # 🔴🟠
-            "ann0d0m1n1": "Real Madryt",  # ⚪🟣
-            "flap": "Borussia",           # 🟡⚫
-            "wordlifepl": "Renopuren",    # 🔵⚪
-            "mario001": "Man City",       # 🔵⚪
-            "pogoda": "Legia"             # 🟢⚪
+            
+            "wenoid": "Galatasaray",      # 🟡🔴
+            "wordlifepl": "Celtic",    # ⚪🟢
         }
         self.players_database: Dict[int, str] = {}
         self.draft_started: bool = False
