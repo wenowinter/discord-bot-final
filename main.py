@@ -27,12 +27,11 @@ class DraftState:
         self.current_round: int = 0
         self.total_rounds: int = 8
         self.picked_numbers: Set[int] = set()
-        self.picked_players: Dict[str, List[int]] = {}
         self.user_teams: Dict[str, str] = {
-            
             "wenoid": "Galatasaray",      # 🟡🔴
             "wordlifepl": "Celtic",    # ⚪🟢
         }
+        self.picked_players: Dict[str, List[int]] = {name.lower(): [] for name in ["wenoid", "wordlifepl"]}  # INITIALIZED
         self.players_database: Dict[int, str] = {}
         self.draft_started: bool = False
         self.team_draft_started: bool = True  # POMIJAMY WYBÓR DRUŻYN
@@ -66,7 +65,8 @@ TEAM_COLORS = {
     "Juventus": ["⚪", "⚫"],
     "Slavia Praga": ["🔴", "⚪"],
     "Borussia": ["🟡", "⚫"],
-    "AS Roma": ["🔴", "🟠"]
+    "AS Roma": ["🔴", "🟠"],
+    "Galatasaray": ["🟡", "🔴"]
 }
 
 PLAYERS_URL = "https://gist.githubusercontent.com/wenowinter/c3151d1a3e34ec235176fccb91a6b107/raw/54daa05bd11b065cb52e8274961269f5efc52191/majklab.txt"
@@ -78,17 +78,31 @@ PARTICIPANTS = list(draft.user_teams.keys())  # Używa przypisanych graczy
 # ========== FUNKCJE POMOCNICZE ========== #
 def find_member_by_name(members: List[discord.Member], name: str) -> discord.Member:
     name_lower = name.lower()
-    return next((m for m in members if name_lower in m.display_name.lower()), None)  # Szuka nawet częściowego dopasowania
+    # Najpierw szukaj dokładnego dopasowania
+    for m in members:
+        if name_lower == m.display_name.lower() or name_lower == m.name.lower():
+            return m
+    # Potem częściowe
+    for m in members:
+        if name_lower in m.display_name.lower() or name_lower in m.name.lower():
+            return m
+    return None
 
 async def load_players() -> Dict[int, str]:
     try:
         response = requests.get(PLAYERS_URL)
         response.raise_for_status()
-        return {
-            int(parts[0]): parts[1]
-            for line in response.text.splitlines()
-            if (parts := line.strip().split(maxsplit=1)) and len(parts) == 2
-        }
+        players_dict = {}
+        for line in response.text.splitlines():
+            if line.strip():
+                parts = line.strip().split(maxsplit=1)
+                if len(parts) == 2:
+                    try:
+                        player_id = int(parts[0])
+                        players_dict[player_id] = parts[1]
+                    except ValueError:
+                        continue
+        return players_dict
     except Exception as e:
         print(f"Błąd ładowania zawodników: {e}")
         return {i: f"Zawodnik {i}" for i in range(1, 101)}
@@ -160,6 +174,7 @@ async def start(ctx):
     if None in draft.players:
         missing = [name for name, member in zip(PARTICIPANTS, draft.players) if member is None]
         await ctx.send(f"❌ Nie znaleziono graczy: {', '.join(missing)}")
+        draft.draft_started = False
         return
 
     await ctx.send(
@@ -250,6 +265,10 @@ async def bonus_registration_timer(channel):
                 f"Macie **{BONUS_SELECTION_TIME.seconds//3600} godzin** na wybranie 5 dodatkowych zawodników.\n"
                 f"Użyjcie `!wybieram_bonus [numery zawodników]`"
             )
+            # Uruchom timer dla wyboru w rundzie bonusowej
+            draft.pick_timer_task = asyncio.create_task(
+                bonus_selection_timer(channel)
+            )
         else:
             await channel.send(
                 "⏰ Czas na rejestrację do rundy dodatkowej zakończony!\n"
@@ -257,6 +276,14 @@ async def bonus_registration_timer(channel):
                 "🏆 **Draft oficjalnie zakończony!**"
             )
             draft.bonus_round_started = False
+
+async def bonus_selection_timer(channel):
+    await asyncio.sleep((draft.bonus_end_time - datetime.utcnow()).total_seconds())
+    
+    if draft.bonus_round_started:
+        # Zakończ rundę bonusową jeśli czas minął
+        draft.bonus_round_started = False
+        await channel.send("⏰ Czas na wybór w rundzie dodatkowej zakończony!")
 
 @bot.command()
 async def bonus(ctx):
@@ -270,7 +297,8 @@ async def bonus(ctx):
     if user_id in draft.bonus_round_players:
         return await ctx.send("Już jesteś zarejestrowany do rundy dodatkowej!")
     
-    if ctx.author.display_name.lower() not in [p.display_name.lower() for p in draft.players]:
+    participant_names = [p.display_name.lower() for p in draft.players]
+    if ctx.author.display_name.lower() not in participant_names:
         return await ctx.send("Tylko uczestnicy draftu mogą zapisać się do rundy dodatkowej!")
     
     draft.bonus_round_players.add(user_id)
@@ -315,6 +343,9 @@ async def wybieram_bonus(ctx, *, choice):
         return await ctx.send(f"Już wybrani: {', '.join(map(str, duplicates))}")
     
     user_name = ctx.author.display_name.lower()
+    if user_name not in draft.picked_players:
+        draft.picked_players[user_name] = []
+    
     draft.picked_players[user_name].extend(picks)
     draft.picked_numbers.update(picks)
     
@@ -362,7 +393,11 @@ async def handle_player_selection(ctx, choice):
     if duplicates:
         return await ctx.send(f"Już wybrani: {', '.join(map(str, duplicates))}")
 
-    draft.picked_players[ctx.author.display_name.lower()].extend(picks)
+    user_name = ctx.author.display_name.lower()
+    if user_name not in draft.picked_players:
+        draft.picked_players[user_name] = []
+    
+    draft.picked_players[user_name].extend(picks)
     draft.picked_numbers.update(picks)
     
     await ctx.send(
@@ -409,14 +444,14 @@ async def reset(ctx):
         return await ctx.send("❌ Tylko administrator może zresetować draft")
 
     draft.draft_started = False
-    draft.team_draft_started = True  # Nadal pomijamy wybór drużyn
+    draft.team_draft_started = True
     draft.bonus_round_started = False
     draft.players.clear()
     draft.current_index = 0
     draft.current_round = 0
     draft.current_team_selector_index = 0
     draft.picked_numbers.clear()
-    draft.picked_players = {u.lower(): [] for u in PARTICIPANTS}
+    draft.picked_players = {name.lower(): [] for name in PARTICIPANTS}  # RESET
     draft.bonus_round_players.clear()
     draft.bonus_end_time = None
 
@@ -489,7 +524,7 @@ async def bonusstatus(ctx):
 
 @bot.command()
 async def lubicz(ctx):
-    await ctx.send("https://i.ibb.co/tw1tD1Ny/412206195-1406350803614829-5742951929454962748-n-removebg-preview-1.png")
+    await ctx.send("https://i.ibb.co/tw1tD1Ny/412206195_1406350803614829-5742951929454962748-n-removebg-preview-1.png")
 
 @bot.command()
 async def komar(ctx):
