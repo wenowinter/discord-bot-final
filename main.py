@@ -77,7 +77,7 @@ TEAM_COLORS = {
     "AS Roma": ["🔴", "🟠"]
 }
 
-PLAYERS_URL = "https://gist.githubusercontent.com/wenowinter/31a3d22985e6171b06f15061a8c3613e/raw/50121c8b83d84e626b79caee280574d8d1033826/mekambe1.txt"
+PLAYERS_URL = "https://gist.githubusercontent.com/wenowinter/c3151d1a3e34ec235176fccb91a6b107/raw/54daa05bd11b065cb52e8274961269f5efc52191/majklab.txt"
 SELECTION_TIME = timedelta(hours=16)
 BONUS_SIGNUP_TIME = timedelta(hours=10)
 BONUS_SELECTION_TIME = timedelta(hours=10)
