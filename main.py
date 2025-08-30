@@ -334,6 +334,10 @@ async def wybieram_bonus(ctx, *, choice):
     if len(picks) != 5:
         return await ctx.send("Wybierz dokładnie 5 zawodników")
     
+    # Sprawdź czy są duplikaty w obecnym wyborze
+    if len(picks) != len(set(picks)):
+        return await ctx.send("❌ Nie możesz wybrać tego samego zawodnika więcej niż raz w tej samej turze!")
+    
     invalid = [p for p in picks if p not in draft.players_database]
     if invalid:
         return await ctx.send(f"Nieznani zawodnicy: {', '.join(map(str, invalid))}")
@@ -384,6 +388,10 @@ async def handle_player_selection(ctx, choice):
     
     if len(picks) != expected:
         return await ctx.send(f"Wybierz dokładnie {expected} zawodników")
+    
+    # Sprawdź czy są duplikaty w obecnym wyborze
+    if len(picks) != len(set(picks)):
+        return await ctx.send("❌ Nie możesz wybrać tego samego zawodnika więcej niż raz w tej samej turze!")
 
     invalid = [p for p in picks if p not in draft.players_database]
     if invalid:
@@ -529,6 +537,10 @@ async def lubicz(ctx):
 @bot.command()
 async def komar(ctx):
     await ctx.send("https://i.ibb.co/zT3813dG/1746106198604.jpg")
+
+@bot.command()
+async def papa(ctx):
+    await ctx.send("https://wykop.pl/cdn/c3201142/comment_1632743224LPCEeyBmCmXNxbUkJK3s6n,w400.gif")
 
 @bot.command()
 async def pomoc(ctx):
