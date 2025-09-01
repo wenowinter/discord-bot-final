@@ -53,6 +53,7 @@ draft = DraftState()
 
 # ========== STAŁE ========== #
 TEAM_COLORS = {
+    
     "Galatasaray": ["🟡", "🔴"],
     "Ossasuna": ["🔴", "🟣"],
     "Bayern": ["🔴", "🔵"],
