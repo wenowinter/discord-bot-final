@@ -31,7 +31,7 @@ class DraftState:
             "ann0d0m1n1": "Ajax",            # ⚪🔴
             "FakenSzit": "Real Madryt",      # ⚪🟣
             "TommyAlex": "Juventus",         # ⚪⚫
-            "pogoda": "Ossasuna"             # 🔴🟣
+            "pogoda": "Ossasuna",            # 🔴🟣
             "wenoid": "Galatasaray",         # 🟡🔴
             "wordlifepl": "Celtic",          # ⚪🟢
             "mikoprotek": "Inter",           # 🔵⚫
