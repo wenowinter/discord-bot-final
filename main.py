@@ -28,8 +28,13 @@ class DraftState:
         self.total_rounds: int = 8
         self.picked_numbers: Set[int] = set()
         self.user_teams: Dict[str, str] = {
-            "wenoid": "Galatasaray",      # 🟡🔴
-            "wordlifepl": "Celtic",    # ⚪🟢
+            "ann0d0m1n1": "Ajax",            # ⚪🔴
+            "FakenSzit": "Real Madryt",      # ⚪🟣
+            "TommyAlex": "Juventus",         # ⚪⚫
+            "pogoda": "Ossasuna"             # 🔴🟣
+            "wenoid": "Galatasaray",         # 🟡🔴
+            "wordlifepl": "Celtic",          # ⚪🟢
+            "mikoprotek": "Inter",           # 🔵⚫
         }
         self.picked_players: Dict[str, List[int]] = {name.lower(): [] for name in ["wenoid", "wordlifepl"]}  # INITIALIZED
         self.players_database: Dict[int, str] = {}
@@ -48,14 +53,14 @@ draft = DraftState()
 
 # ========== STAŁE ========== #
 TEAM_COLORS = {
-    "Jagiellonia": ["🟡", "🔴"],
-    "Legia": ["🟢", "⚪"],
+    "Galatasaray": ["🟡", "🔴"],
+    "Ossasuna": ["🔴", "🟣"],
     "Bayern": ["🔴", "🔵"],
     "Renopuren": ["🔵", "⚪"],
     "Liverpool": ["🔴", "⚪"],
     "Man City": ["🔵", "⚪"],
     "Man United": ["🔴", "⚫"],
-    "Arsenal": ["🔴", "⚪"],
+    "Ajax": ["🔴", "⚪"],
     "Celtic": ["🟢", "⚪"],
     "PSG": ["🔵", "🔴"],
     "Real Madryt": ["⚪", "🟣"],
@@ -66,7 +71,6 @@ TEAM_COLORS = {
     "Slavia Praga": ["🔴", "⚪"],
     "Borussia": ["🟡", "⚫"],
     "AS Roma": ["🔴", "🟠"],
-    "Galatasaray": ["🟡", "🔴"]
 }
 
 PLAYERS_URL = "https://gist.githubusercontent.com/wenowinter/c3151d1a3e34ec235176fccb91a6b107/raw/54daa05bd11b065cb52e8274961269f5efc52191/majklab.txt"
@@ -543,6 +547,25 @@ async def papa(ctx):
     await ctx.send("https://wykop.pl/cdn/c3201142/comment_1632743224LPCEeyBmCmXNxbUkJK3s6n,w400.gif")
 
 @bot.command()
+async def paei100(ctx):
+    await ctx.send("https://i.ibb.co/JRXhrkmx/Comment-Ql-Hxr-Fps-Ot-LG2-XTGSe-BCsn-Gk2d-Yim-ATE.jpg")
+                   
+@bot.command()
+async def boniek(ctx):
+    await ctx.send("https://cdn.laczynaspilka.pl/cms2/prod/sites/default/files/styles/bpp_large/public/2021-02/bonio.png")
+
+@bot.command()
+async def eusebio(ctx):
+    await ctx.send("https://nationalmuseumpublications.co.za/wp-content/uploads/2024/04/Eusebio-top.jpg")
+
+@bot.command()
+async def nazario(ctx):
+    await ctx.send("https://a.allegroimg.com/s512/118e5b/252f2287456f94a14902af7ff206/Plakat-RONALDO-NAZARIO-PILKA-NOZNA-100x70-cm-95")
+    
+
+
+
+@bot.command()
 async def pomoc(ctx):
     help_msg = [
         "**📋 Lista komend:**",
@@ -558,6 +581,10 @@ async def pomoc(ctx):
         "• `!lubicz` - Obrazek Lubicz",
         "• `!komar` - Obrazek Komar",
         "• `!reset` - Resetuje draft (admin)"
+        "• `!nazario` - Obrazek Nazario",
+        "• `!paei100` - Kto tam wie",
+        "• `!boniek` - Obrazek Boniek",
+        "• `!eusebio` - Obrazek Eusebio",
     ]
     await ctx.send("\n".join(help_msg))
 
